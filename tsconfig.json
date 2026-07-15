@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "module": "esnext",
     "target": "esnext",
     "lib": ["DOM", "ESNext"],
@@ -8,7 +7,7 @@
     "esModuleInterop": true,
     "incremental": false,
     "skipLibCheck": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "noUnusedLocals": true,
     "strictNullChecks": true,
@@ -18,8 +17,8 @@
       "vitest/importMeta"
     ],
     "paths": {
-      "~/*": ["src/*"],
-      "@hankit/tools": ["packages/tools/src/index.ts"]
+      "~/*": ["./src/*"],
+      "@hankit/tools": ["./packages/tools/src/index.ts"]
     }
   },
   "exclude": ["dist", "node_modules"]

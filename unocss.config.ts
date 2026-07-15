@@ -1,5 +1,13 @@
 import type { Theme } from '@unocss/preset-mini'
+import type { IconifyJSON } from '@iconify/utils'
 import { defineConfig, presetAttributify, presetIcons, presetUno } from 'unocss'
+
+const IconCollections: Record<string, () => Promise<IconifyJSON>> = {
+  carbon: () => import('@iconify-json/carbon/icons.json').then(m => m.default as IconifyJSON),
+  ri: () => import('@iconify-json/ri/icons.json').then(m => m.default as IconifyJSON),
+  ep: () => import('@iconify-json/ep/icons.json').then(m => m.default as IconifyJSON),
+  mdi: () => import('@iconify-json/mdi/icons.json').then(m => m.default as IconifyJSON),
+}
 
 export default defineConfig({
   shortcuts: [
@@ -40,6 +48,7 @@ export default defineConfig({
     presetAttributify(),
     presetIcons({
       scale: 1.2,
+      collections: IconCollections,
     }),
   ],
 })

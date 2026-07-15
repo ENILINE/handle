@@ -10,3 +10,5 @@ node_modules
 .netlify
 .env
 src/data/unknown.txt
+CLAUDE.md
+.CLAUDE.md

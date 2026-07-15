@@ -71,5 +71,5 @@ if (import.meta.hot) {
   // eslint-disable-next-line no-console
   console.log(`${answers.length - dayNo.value} days left`)
   if ((answers.length - daySince.value) < 10)
-    throw new Error('Not enough days left!')
+    console.warn(`Not enough days left! ${answers.length} answers prepared, day ${daySince.value}`)
 }
