@@ -1,14 +1,13 @@
 import index from './idiom_index.json'
 
 export interface IdiomInfo {
-  pinyin: string
   explanation: string
   derivation: string
   example: string
 }
 
 type IndexData = Record<string, string>
-type IdiomDataFile = Record<string, { p: string; e: string; d: string; x: string }>
+type IdiomDataFile = Record<string, { e: string; d: string; x: string }>
 
 const cache = new Map<string, IdiomDataFile>()
 
@@ -30,7 +29,6 @@ export async function getIdiomInfo(word: string): Promise<IdiomInfo | undefined>
   if (!entry)
     return undefined
   return {
-    pinyin: entry.p,
     explanation: entry.e,
     derivation: entry.d,
     example: entry.x,
@@ -38,7 +36,6 @@ export async function getIdiomInfo(word: string): Promise<IdiomInfo | undefined>
 }
 
 export function getIdiomInfoSync(word: string): IdiomInfo | undefined {
-  // Sync fallback for pre-cached lookups
   const firstChar = word[0]
   const fileName = (index as IndexData)[firstChar]
   if (!fileName)
@@ -50,7 +47,6 @@ export function getIdiomInfoSync(word: string): IdiomInfo | undefined {
   if (!entry)
     return undefined
   return {
-    pinyin: entry.p,
     explanation: entry.e,
     derivation: entry.d,
     example: entry.x,
