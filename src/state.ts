@@ -21,6 +21,7 @@ export const showCheatSheet = ref(false)
 export const showShareDialog = ref(false)
 export const useMask = ref(false)
 export const showIdiomExplanation = ref(false)
+export const idiomSearchWord = ref('')
 
 export const useNumberTone = computed(() => {
   if (inputMode.value === 'sp')

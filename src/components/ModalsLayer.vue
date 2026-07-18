@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
-  answer,
   breakpoints,
+  idiomSearchWord,
   showCheatSheet,
   showDashboard,
   showFailed,
@@ -42,6 +42,6 @@ const lg = breakpoints.lg
     <VariantLinks />
   </Modal>
   <Modal v-model="showIdiomExplanation" direction="top">
-    <IdiomExplanation :word="answer.word" />
+    <IdiomExplanation :word="idiomSearchWord" />
   </Modal>
 </template>

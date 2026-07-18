@@ -107,5 +107,8 @@
   "idiom-loading": "加载中...",
   "idiom-loading-failed": "加载失败，请稍后重试",
   "idiom-retry": "重试",
-  "idiom-no-data": "（暂无）"
+  "idiom-no-data": "（暂无）",
+  "idiom-search-placeholder": "输入四字成语...",
+  "idiom-feedback": "成语数据有误？反馈错误",
+  "idiom-title": "查成语"
 }

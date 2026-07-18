@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { isDark, showDashboard, showHelp, showSettings, useMask } from '~/state'
+import { idiomSearchWord, isDark, showDashboard, showHelp, showIdiomExplanation, showSettings, useMask } from '~/state'
 import { gamesCount } from '~/storage'
 
 const toggleDark = useToggle(isDark)
@@ -21,6 +21,9 @@ function openHelp() {
       <div flex items-center>
         <button icon-btn mx2 @click="openHelp()">
           <div i-carbon-help />
+        </button>
+        <button icon-btn mx2 @click="idiomSearchWord = ''; showIdiomExplanation = true">
+          <div i-carbon-search />
         </button>
         <button v-if="gamesCount" icon-btn mx2 @click="toggleDashboard()">
           <div i-carbon-catalog />
