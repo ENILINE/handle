@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import {
+  answer,
   breakpoints,
   showCheatSheet,
   showDashboard,
   showFailed,
   showHelp,
   showHint,
+  showIdiomExplanation,
   showSettings,
   showShareDialog,
   showVariants,
@@ -38,5 +40,8 @@ const lg = breakpoints.lg
   </Modal>
   <Modal v-model="showVariants" direction="top">
     <VariantLinks />
+  </Modal>
+  <Modal v-model="showIdiomExplanation" direction="top">
+    <IdiomExplanation :word="answer.word" />
   </Modal>
 </template>

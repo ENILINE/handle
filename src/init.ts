@@ -1,5 +1,5 @@
 import { initialized, markEnd, markStart, meta, pauseTimer } from './storage'
-import { answer, dayNo, daySince, isDev, isFinished, isPassed, showCheatSheet, showHelp } from './state'
+import { answer, dayNo, daySince, isDev, isFailed, isFinished, isPassed, showCheatSheet, showHelp, showIdiomExplanation } from './state'
 import { t } from './i18n'
 import { answers } from './answers/list'
 import { START_DATE } from './logic/constants'
@@ -31,6 +31,22 @@ watch(isFinished, (v) => {
   if (v)
     showCheatSheet.value = false
 }, { flush: 'post' })
+
+watch(isPassed, (v) => {
+  if (v) {
+    setTimeout(() => {
+      showIdiomExplanation.value = true
+    }, 2000)
+  }
+})
+
+watch(() => meta.value.answer, (v) => {
+  if (v && isFailed.value) {
+    setTimeout(() => {
+      showIdiomExplanation.value = true
+    }, 800)
+  }
+})
 
 const visible = useDocumentVisibility()
 

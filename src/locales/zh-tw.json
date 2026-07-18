@@ -98,5 +98,14 @@
   "win-no-hint-count": "無提示",
   "win-rate": "勝率",
   "zhuyin": "注音",
-  "ziyin": "字音"
+  "ziyin": "字音",
+  "idiom-explanation": "成語解釋",
+  "idiom-explanation-title": "解釋",
+  "idiom-derivation": "出處",
+  "idiom-example": "示例",
+  "idiom-no-explanation": "暫無該成語的解釋信息",
+  "idiom-loading": "載入中...",
+  "idiom-loading-failed": "載入失敗，請稍後重試",
+  "idiom-retry": "重試",
+  "idiom-no-data": "（暫無）"
 }

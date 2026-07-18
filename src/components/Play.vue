@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { filterNonChineseChars } from '@hankit/tools'
-import { answer, dayNo, isDev, isFailed, isFinished, showCheatSheet, showFailed, showHelp, showHint } from '~/state'
+import { answer, dayNo, isDev, isFailed, isFinished, showCheatSheet, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
 import { markStart, meta, tries, useNoHint, useStrictMode } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkValidIdiom } from '~/logic'
@@ -77,6 +77,9 @@ watchEffect(() => {
             {{ t('correct-answer') }}
           </div>
           <WordBlocks :word="answer.word" />
+          <button icon-btn mt2 flex="~ gap-1 center" @click="showIdiomExplanation = true">
+            <div i-carbon-book /> {{ t('idiom-explanation') }}
+          </button>
         </div>
       </template>
 
