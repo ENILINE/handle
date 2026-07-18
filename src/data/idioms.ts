@@ -11,20 +11,30 @@ type IdiomDataFile = Record<string, { e: string; d: string; x: string }>
 
 const cache = new Map<string, IdiomDataFile>()
 
-async function loadFile(name: string): Promise<IdiomDataFile> {
-  if (cache.has(name))
-    return cache.get(name)!
-  const data = await fetch(`/idioms/${name}`).then(r => r.json()) as IdiomDataFile
-  cache.set(name, data)
+async function loadFile(bucketId: string): Promise<IdiomDataFile> {
+  if (cache.has(bucketId))
+    return cache.get(bucketId)!
+  const data = await fetch(`${import.meta.env.BASE_URL}idiom-data/idiom_${bucketId}.json`).then(r => r.json()) as IdiomDataFile
+  cache.set(bucketId, data)
   return data
 }
 
+// Manual overrides for one-off additions without rebuilding the whole dataset.
+// Add entries here when you need to quickly add or fix an idiom's explanation data.
+const overrides: Record<string, IdiomInfo> = {
+  // Example:
+  // '一心一意': { pinyin: 'yi1 xin1 yi1 yi4', explanation: '...', derivation: '...', example: '...' },
+}
+
 export async function getIdiomInfo(word: string): Promise<IdiomInfo | undefined> {
-  const firstChar = word[0]
-  const fileName = (index as IndexData)[firstChar]
-  if (!fileName)
+  const override = overrides[word]
+  if (override)
+    return override
+
+  const bucketId = (index as IndexData)[word[0]]
+  if (!bucketId)
     return undefined
-  const file = await loadFile(fileName)
+  const file = await loadFile(bucketId)
   const entry = file[word]
   if (!entry)
     return undefined
@@ -36,11 +46,14 @@ export async function getIdiomInfo(word: string): Promise<IdiomInfo | undefined>
 }
 
 export function getIdiomInfoSync(word: string): IdiomInfo | undefined {
-  const firstChar = word[0]
-  const fileName = (index as IndexData)[firstChar]
-  if (!fileName)
+  const override = overrides[word]
+  if (override)
+    return override
+
+  const bucketId = (index as IndexData)[word[0]]
+  if (!bucketId)
     return undefined
-  const file = cache.get(fileName)
+  const file = cache.get(bucketId)
   if (!file)
     return undefined
   const entry = file[word]
@@ -54,8 +67,8 @@ export function getIdiomInfoSync(word: string): IdiomInfo | undefined {
 }
 
 export function isIdiomCached(word: string): boolean {
-  const fileName = (index as IndexData)[word[0]]
-  if (!fileName)
+  const bucketId = (index as IndexData)[word[0]]
+  if (!bucketId)
     return true // no file means no data, treat as "cached" (nothing to load)
-  return cache.has(fileName)
+  return cache.has(bucketId)
 }
