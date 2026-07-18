@@ -77,9 +77,6 @@ watchEffect(() => {
             {{ t('correct-answer') }}
           </div>
           <WordBlocks :word="answer.word" />
-          <button icon-btn mt2 flex="~ gap-1 center" @click="idiomSearchWord = answer.word; showIdiomExplanation = true">
-            <div i-carbon-book /> {{ t('idiom-explanation') }}
-          </button>
         </div>
       </template>
 
@@ -148,6 +145,11 @@ watchEffect(() => {
       <Transition name="fade-in">
         <div v-if="isFinishedDelay && isFinished">
           <ResultFooter />
+          <div flex justify-center mt2>
+            <button btn flex="~ gap-1 center" @click="idiomSearchWord = answer.word; showIdiomExplanation = true">
+              <div i-carbon-book /> {{ t('idiom-explanation') }}
+            </button>
+          </div>
           <Countdown />
         </div>
       </Transition>

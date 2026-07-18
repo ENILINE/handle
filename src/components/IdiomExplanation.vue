@@ -2,6 +2,7 @@
 import { filterNonChineseChars } from '@hankit/tools'
 import type { IdiomInfo } from '~/data/idioms'
 import { getIdiomInfo, getIdiomInfoSync } from '~/data/idioms'
+import { getPinyin } from '~/logic/idioms'
 import { showIdiomExplanation } from '~/state'
 import { t } from '~/i18n'
 
@@ -13,6 +14,7 @@ const searchWord = ref('')
 const info = ref<IdiomInfo | undefined>(undefined)
 const loading = ref(false)
 const error = ref(false)
+const isComposing = ref(false)
 
 watch(() => props.word, (w) => {
   searchWord.value = w
@@ -44,15 +46,38 @@ async function loadWord() {
 
 watch(searchWord, loadWord)
 
-function onInput(e: Event) {
+function onCompositionStart() {
+  isComposing.value = true
+}
+
+function onCompositionEnd(e: Event) {
+  isComposing.value = false
   const target = e.target as HTMLInputElement
   target.value = filterNonChineseChars(target.value).slice(0, 4)
   searchWord.value = target.value
 }
 
-const hasExplanation = computed(() => info.value && info.value.explanation !== '无')
-const hasDerivation = computed(() => info.value && info.value.derivation !== '无')
-const hasExample = computed(() => info.value && info.value.example !== '无')
+function onInput(e: Event) {
+  if (isComposing.value)
+    return
+  const target = e.target as HTMLInputElement
+  target.value = filterNonChineseChars(target.value).slice(0, 4)
+  searchWord.value = target.value
+}
+
+const pinyin = computed(() => {
+  if (searchWord.value.length === 4)
+    return getPinyin(searchWord.value).join(' ')
+  return ''
+})
+
+function hasContent(val: string | undefined) {
+  return val && val !== '无'
+}
+
+const hasExplanation = computed(() => hasContent(info.value?.explanation))
+const hasDerivation = computed(() => hasContent(info.value?.derivation))
+const hasExample = computed(() => hasContent(info.value?.example))
 const notFound = computed(() => !loading.value && !error.value && searchWord.value.length === 4 && !hasExplanation.value)
 const feedbackUrl = computed(() =>
   `https://github.com/ENILINE/handle/issues/new?title=成语数据错误：${searchWord.value}&labels=数据纠错`,
@@ -73,6 +98,8 @@ const feedbackUrl = computed(() =>
         bg-transparent w-86 p3 outline-none text-center text-lg
         type="text"
         :placeholder="t('idiom-search-placeholder')"
+        @compositionstart="onCompositionStart"
+        @compositionend="onCompositionEnd"
         @input="onInput"
       >
     </div>
@@ -96,7 +123,10 @@ const feedbackUrl = computed(() =>
     </div>
 
     <div v-else-if="info" flex="~ col" gap-4 w-full mt5>
-      <div text-2xl font-serif tracking-2>{{ searchWord }}</div>
+      <div>
+        <div text-2xl font-serif tracking-2>{{ searchWord }}</div>
+        <div v-if="pinyin" text-sm font-mono op50 mt1>{{ pinyin }}</div>
+      </div>
 
       <div v-if="hasExplanation" text-left>
         <div text-sm font-bold op50 mb1>{{ t('idiom-explanation-title') }}</div>
