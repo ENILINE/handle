@@ -175,7 +175,7 @@ const partTwo = computed(() => {
             <div
               v-if="useNumberTone"
               :class="getColor(parsed?.tone)"
-              text-xs leading-1em mr--3 mt--1 ml-1px
+              text-xs leading-1em mr--2 mt--1 ml-1px
             >
               {{ char.tone }}
             </div>

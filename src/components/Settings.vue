@@ -44,12 +44,12 @@ defineProps<{
         </button>
       </div>
       <div square-btn m2 :class="inputMode !== 'py' ? 'op50 pointer-events-none' : ''">
-        <button :class="!useNumberTone ? 'text-primary' : 'op80' " @click="useNumberToneRaw = false">
-          {{ t('tone-symbol') }}
-        </button>
-        <div w-1px h-4 border="r base" />
         <button :class="useNumberTone ? 'text-primary' : 'op80' " @click="useNumberToneRaw = true">
           {{ t('tone-number') }}
+        </button>
+        <div w-1px h-4 border="r base" />
+        <button :class="!useNumberTone ? 'text-primary' : 'op80' " @click="useNumberToneRaw = false">
+          {{ t('tone-symbol') }}
         </button>
       </div>
     </div>
@@ -86,17 +86,17 @@ defineProps<{
         :class="!!meta.tries?.length ? 'op50 pointer-events-none' : ''"
       >
         <button
-          :class="gameMode === 'normal' ? 'text-primary' : 'op80'"
-          @click="gameMode = 'normal'"
-        >
-          {{ t('game-mode-normal') }}
-        </button>
-        <div w-1px h-4 border="r base" />
-        <button
           :class="gameMode === 'unlimited' ? 'text-primary' : 'op80'"
           @click="gameMode = 'unlimited'"
         >
           {{ t('game-mode-unlimited') }}
+        </button>
+        <div w-1px h-4 border="r base" />
+        <button
+          :class="gameMode === 'normal' ? 'text-primary' : 'op80'"
+          @click="gameMode = 'normal'"
+        >
+          {{ t('game-mode-normal') }}
         </button>
         <div w-1px h-4 border="r base" />
         <button
