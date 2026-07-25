@@ -155,7 +155,6 @@ export function checkHardMode(
   for (const dim of dims) {
     const exacts = new Map<number, string | number>()
     const mustCount = new Map<string | number, number>()
-    const forbidden = new Map<number, Set<string | number>>()
 
     for (const t of previousTries) {
       for (let i = 0; i < WORD_LENGTH; i++) {
@@ -165,28 +164,17 @@ export function checkHardMode(
         if (val === '' || val === undefined)
           continue
 
-        if (result === 'exact') {
+        if (result === 'exact' || result === 'misplaced')
+          mustCount.set(val, (mustCount.get(val) || 0) + 1)
+
+        if (result === 'exact')
           exacts.set(i, val)
-          mustCount.set(val, (mustCount.get(val) || 0) + 1)
-        }
-        else if (result === 'misplaced') {
-          mustCount.set(val, (mustCount.get(val) || 0) + 1)
-          if (!forbidden.has(i))
-            forbidden.set(i, new Set())
-          forbidden.get(i)!.add(val)
-        }
       }
     }
 
     for (const [pos, val] of exacts) {
       const inputVal = dim === 'char' ? toSimplified(input[pos].char) : input[pos][dim]
       if (inputVal !== val)
-        return false
-    }
-
-    for (const [pos, vals] of forbidden) {
-      const inputVal = dim === 'char' ? toSimplified(input[pos].char) : input[pos][dim]
-      if (vals.has(inputVal) && exacts.get(pos) !== inputVal)
         return false
     }
 

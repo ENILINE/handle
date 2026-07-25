@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { filterNonChineseChars } from '@hankit/tools'
+import { filterNonChineseChars, toSimplified } from '@hankit/tools'
 import { answer, dayNo, idiomSearchWord, isDev, isFailed, isFinished, parseWord, parsedTries, showCheatSheet, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
 import { gameMode, markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
@@ -11,7 +11,7 @@ const inputValue = ref('')
 const showToast = autoResetRef(false, 1000)
 const shake = autoResetRef(false, 500)
 
-const toastKey = ref<'invalid-idiom' | 'hard-mode-violation'>('invalid-idiom')
+const toastKey = ref<'invalid-idiom' | 'hard-mode-violation' | 'duplicate-guess'>('invalid-idiom')
 const isFinishedDelay = debouncedRef(isFinished, 800)
 
 function enter() {
@@ -23,6 +23,16 @@ function enter() {
     showToast.value = true
     shake.value = true
     return
+  }
+
+  if (gameMode.value !== 'unlimited') {
+    const simplifiedInput = toSimplified(input.value)
+    if (tries.value.some(t => toSimplified(t) === simplifiedInput)) {
+      toastKey.value = 'duplicate-guess'
+      showToast.value = true
+      shake.value = true
+      return
+    }
   }
 
   if (meta.value.strict == null)

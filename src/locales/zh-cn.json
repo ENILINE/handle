@@ -114,5 +114,6 @@
   "game-mode-normal": "普通模式",
   "game-mode-unlimited": "无限制模式",
   "game-mode-strict": "严格模式",
-  "hard-mode-violation": "须使用已揭示的线索"
+  "hard-mode-violation": "须使用已揭示的线索",
+  "duplicate-guess": "此成语已猜过"
 }

@@ -35,7 +35,7 @@ export default defineConfig({
         Unocss(),
       ],
   test: {
-    includeSource: ['packages/*/src/**/*.ts'],
+    includeSource: ['packages/*/src/**/*.ts', 'src/**/*.test.ts'],
   },
   build: {
     chunkSizeWarningLimit: 1000,
