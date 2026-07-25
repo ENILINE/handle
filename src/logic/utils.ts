@@ -3,6 +3,7 @@ import type { SpMode } from '@hankit/tools'
 import { pinyinInitials, toShuangpin, toSimplified, toZhuyin } from '@hankit/tools'
 import type { InputMode, MatchResult, ParsedChar } from './types'
 import { getPinyin } from './idioms'
+import { WORD_LENGTH } from './constants'
 
 export function parsePinyin(pinyin: string, mode: InputMode = 'py', spMode: SpMode = 'sougou') {
   let parts: string[] = []
@@ -142,6 +143,68 @@ export function numberToHanzi(number: number) {
     .replace('二十', '廿')
     .replace(/零+/, '零')
     .replace(/(.)零$/, '$1')
+}
+
+export function checkHardMode(
+  input: ParsedChar[],
+  previousTries: { word: ParsedChar[]; result: MatchResult[] }[],
+): boolean {
+  type Dim = 'char' | '_1' | '_2' | '_3' | 'tone'
+  const dims: Dim[] = ['char', '_1', '_2', '_3', 'tone']
+
+  for (const dim of dims) {
+    const exacts = new Map<number, string | number>()
+    const mustCount = new Map<string | number, number>()
+    const forbidden = new Map<number, Set<string | number>>()
+
+    for (const t of previousTries) {
+      for (let i = 0; i < WORD_LENGTH; i++) {
+        const val = dim === 'char' ? toSimplified(t.word[i].char) : t.word[i][dim]
+        const result = t.result[i][dim]
+
+        if (val === '' || val === undefined)
+          continue
+
+        if (result === 'exact') {
+          exacts.set(i, val)
+          mustCount.set(val, (mustCount.get(val) || 0) + 1)
+        }
+        else if (result === 'misplaced') {
+          mustCount.set(val, (mustCount.get(val) || 0) + 1)
+          if (!forbidden.has(i))
+            forbidden.set(i, new Set())
+          forbidden.get(i)!.add(val)
+        }
+      }
+    }
+
+    for (const [pos, val] of exacts) {
+      const inputVal = dim === 'char' ? toSimplified(input[pos].char) : input[pos][dim]
+      if (inputVal !== val)
+        return false
+    }
+
+    for (const [pos, vals] of forbidden) {
+      const inputVal = dim === 'char' ? toSimplified(input[pos].char) : input[pos][dim]
+      if (vals.has(inputVal) && exacts.get(pos) !== inputVal)
+        return false
+    }
+
+    const inputCounts = new Map<string | number, number>()
+    for (let i = 0; i < WORD_LENGTH; i++) {
+      const val = dim === 'char' ? toSimplified(input[i].char) : input[i][dim]
+      if (val === '' || val === undefined)
+        continue
+      inputCounts.set(val, (inputCounts.get(val) || 0) + 1)
+    }
+
+    for (const [val, required] of mustCount) {
+      if ((inputCounts.get(val) || 0) < required)
+        return false
+    }
+  }
+
+  return true
 }
 
 /**

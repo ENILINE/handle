@@ -2,6 +2,8 @@ export type MatchType = 'exact' | 'misplaced' | 'none' | 'deleted'
 
 export type InputMode = 'py' | 'zy' | 'sp'
 
+export type GameMode = 'normal' | 'unlimited' | 'strict'
+
 export interface ParsedChar {
   char: string
   _1: string
@@ -30,6 +32,6 @@ export interface TriesMeta {
   tries?: string[]
   hint?: boolean
   hintLevel?: number
-  strict?: boolean
+  strict?: GameMode
   sent?: boolean
 }

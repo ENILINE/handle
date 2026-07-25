@@ -39,7 +39,7 @@ function close() {
 }
 
 const allWords = computed(() => Array.from(new Set(Object.values(history.value).flatMap(i => i.tries).filter(Boolean) as string[])))
-const validWords = computed(() => allWords.value.filter(i => checkValidIdiom(i, true)))
+const validWords = computed(() => allWords.value.filter(i => checkValidIdiom(i)))
 </script>
 
 <template>

@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { filterNonChineseChars } from '@hankit/tools'
-import { answer, dayNo, idiomSearchWord, isDev, isFailed, isFinished, showCheatSheet, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
-import { markStart, meta, tries, useNoHint, useStrictMode } from '~/storage'
+import { answer, dayNo, idiomSearchWord, isDev, isFailed, isFinished, parseWord, parsedTries, showCheatSheet, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
+import { gameMode, markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
-import { TRIES_LIMIT, WORD_LENGTH, checkValidIdiom } from '~/logic'
+import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
 
 const el = ref<HTMLInputElement>()
 const input = ref('')
@@ -11,18 +11,33 @@ const inputValue = ref('')
 const showToast = autoResetRef(false, 1000)
 const shake = autoResetRef(false, 500)
 
+const toastKey = ref<'invalid-idiom' | 'hard-mode-violation'>('invalid-idiom')
 const isFinishedDelay = debouncedRef(isFinished, 800)
 
 function enter() {
   if (input.value.length !== WORD_LENGTH)
     return
-  if (!checkValidIdiom(input.value, useStrictMode.value)) {
+
+  if (gameMode.value !== 'unlimited' && !checkValidIdiom(input.value)) {
+    toastKey.value = 'invalid-idiom'
     showToast.value = true
     shake.value = true
-    return false
+    return
   }
+
   if (meta.value.strict == null)
-    meta.value.strict = useStrictMode.value
+    meta.value.strict = gameMode.value
+
+  if (gameMode.value === 'strict' && parsedTries.value.length > 0) {
+    const inputParsed = parseWord(input.value)
+    if (!checkHardMode(inputParsed, parsedTries.value)) {
+      toastKey.value = 'hard-mode-violation'
+      showToast.value = true
+      shake.value = true
+      return
+    }
+  }
+
   tries.value.push(input.value)
   input.value = ''
   inputValue.value = ''
@@ -113,7 +128,7 @@ watchEffect(() => {
               :class="showToast ? '' : 'op0 translate-y--1'"
             >
               <span tracking-1 pl1>
-                {{ t('invalid-idiom') }}
+                {{ t(toastKey) }}
               </span>
             </div>
           </div>

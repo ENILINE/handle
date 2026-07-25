@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { colorblind, inputMode, meta, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw, useStrictMode } from '~/storage'
+import { colorblind, gameMode, inputMode, meta, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
 import { useNumberTone } from '~/state'
 import { locale, t } from '~/i18n'
 
@@ -81,17 +81,31 @@ defineProps<{
         {{ t('check-assist') }}
         <div v-if="useCheckAssist" square-btn-mark />
       </button>
-      <button
+      <div
         square-btn m2
-        :class="[
-          useStrictMode ? 'text-primary' : 'op80',
-          !!meta.tries?.length ? 'op50 pointer-events-none' : '',
-        ]"
-        @click="useStrictMode = !useStrictMode"
+        :class="!!meta.tries?.length ? 'op50 pointer-events-none' : ''"
       >
-        {{ t('strict-mode') }}
-        <div v-if="useStrictMode" square-btn-mark />
-      </button>
+        <button
+          :class="gameMode === 'normal' ? 'text-primary' : 'op80'"
+          @click="gameMode = 'normal'"
+        >
+          {{ t('game-mode-normal') }}
+        </button>
+        <div w-1px h-4 border="r base" />
+        <button
+          :class="gameMode === 'unlimited' ? 'text-primary' : 'op80'"
+          @click="gameMode = 'unlimited'"
+        >
+          {{ t('game-mode-unlimited') }}
+        </button>
+        <div w-1px h-4 border="r base" />
+        <button
+          :class="gameMode === 'strict' ? 'text-primary' : 'op80'"
+          @click="gameMode = 'strict'"
+        >
+          {{ t('game-mode-strict') }}
+        </button>
+      </div>
     </div>
   </div>
 </template>

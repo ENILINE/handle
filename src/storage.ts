@@ -1,7 +1,7 @@
 import type { SpMode } from '@hankit/tools'
 import { preferZhuyin, t } from './i18n'
 import { dayNo } from './state'
-import type { InputMode, TriesMeta } from './logic'
+import type { GameMode, InputMode, TriesMeta } from './logic'
 
 export const legacyTries = useStorage<Record<number, string[]>>('handle-tries', {})
 
@@ -14,7 +14,26 @@ export const colorblind = useStorage('handle-colorblind', false)
 export const useNoHint = useStorage('handle-hard-mode', false)
 export const useNumberTone = useStorage('handle-number-tone', false)
 export const useCheckAssist = useStorage('handle-check-assist', false)
-export const useStrictMode = useStorage('handle-strict', false)
+export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
+
+export function migrateGameMode() {
+  const NEW_KEY = 'handle-game-mode'
+  const OLD_KEY = 'handle-strict'
+  if (localStorage.getItem(NEW_KEY) != null)
+    return
+  const raw = localStorage.getItem(OLD_KEY)
+  if (raw != null) {
+    try {
+      const oldVal = JSON.parse(raw)
+      if (oldVal === true)
+        localStorage.setItem(NEW_KEY, JSON.stringify('normal'))
+      else if (oldVal === false)
+        localStorage.setItem(NEW_KEY, JSON.stringify('unlimited'))
+      localStorage.removeItem(OLD_KEY)
+    }
+    catch { /* corrupted, ignore */ }
+  }
+}
 export const acceptCollecting = useStorage('handle-accept-collecting', true)
 
 export const meta = computed<TriesMeta>({

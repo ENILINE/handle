@@ -29,7 +29,7 @@ const lines = computed(() => {
     [
       t('name'),
       dayNoHanzi.value,
-      meta.value.strict ? t('strict-mode').slice(0, 2) : '',
+      meta.value.strict && meta.value.strict !== 'normal' ? t(`game-mode-${meta.value.strict}`).slice(0, 2) : '',
       !meta.value.hint ? t('hint-level-none') : '',
     ].filter(Boolean).join(' · '),
     '',

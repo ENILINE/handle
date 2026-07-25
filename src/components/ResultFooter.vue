@@ -23,8 +23,8 @@ const hintText = computed(() => {
       {{ dayNoHanzi }} ·
     </template>
     {{ hintText }} ·
-    <template v-if="meta.strict">
-      {{ t('strict-mode') }} ·
+    <template v-if="meta.strict && meta.strict !== 'normal'">
+      {{ t(`game-mode-${meta.strict}`) }} ·
     </template>
     {{ formatDuration(meta.duration || 0) }}
   </div>

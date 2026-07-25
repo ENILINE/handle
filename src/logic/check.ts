@@ -1,3 +1,4 @@
+import type { GameMode } from './types'
 import { WORD_LENGTH } from './constants'
 import { getIdiom } from './idioms'
 
@@ -8,8 +9,8 @@ export function filterNonChineseChars(input: string) {
     .join('')
 }
 
-export function checkValidIdiom(word: string, strict = false) {
-  if (!strict)
+export function checkValidIdiom(word: string, mode: GameMode = 'normal'): boolean {
+  if (mode === 'unlimited')
     return true
   return !!getIdiom(word)
 }

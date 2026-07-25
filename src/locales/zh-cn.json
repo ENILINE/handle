@@ -110,5 +110,9 @@
   "idiom-no-data": "（暂无）",
   "idiom-search-placeholder": "输入四字成语...",
   "idiom-feedback": "成语数据有误？反馈错误",
-  "idiom-title": "查成语"
+  "idiom-title": "查成语",
+  "game-mode-normal": "普通模式",
+  "game-mode-unlimited": "无限制模式",
+  "game-mode-strict": "严格模式",
+  "hard-mode-violation": "须使用已揭示的线索"
 }

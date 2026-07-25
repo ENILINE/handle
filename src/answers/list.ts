@@ -551,7 +551,7 @@ if (import.meta.hot) {
       throw new Error(`Word ${a[0]} is duplicated at ${map.get(a[0])}`)
     if (a[1] && !a[0].includes(a[1]))
       throw new Error(`Hint ${a[1]} is not included in ${a[0]}`)
-    if (!checkValidIdiom(a[0], true))
+    if (!checkValidIdiom(a[0]))
       throw new Error(`${a[0]} is not a valid idiom`)
   })
 }

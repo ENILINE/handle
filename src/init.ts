@@ -1,4 +1,7 @@
-import { initialized, markEnd, markStart, meta, pauseTimer } from './storage'
+import { initialized, markEnd, markStart, meta, migrateGameMode, pauseTimer } from './storage'
+
+migrateGameMode()
+
 import { answer, dayNo, daySince, isDev, isFinished, isPassed, showCheatSheet, showHelp } from './state'
 import { t } from './i18n'
 import { answers } from './answers/list'
