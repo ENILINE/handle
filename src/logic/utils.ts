@@ -74,6 +74,9 @@ export function testAnswer(input: ParsedChar[], answer: ParsedChar[]) {
     tone: answer
       .map((a, i) => input[i].tone === a.tone ? undefined : a.tone)
       .filter(i => i != null),
+    py: answer
+      .map((a, i) => input[i].yin === a.yin ? undefined : a.yin)
+      .filter(i => i != null),
     parts: answer
       .flatMap((a, i) => a.parts.filter(p => !input[i].parts.includes(p)))
       .filter(i => i != null) as string[],
@@ -115,6 +118,11 @@ export function testAnswer(input: ParsedChar[], answer: ParsedChar[]) {
         : includesAndRemove(unmatched.parts, a._3)
           ? 'misplaced'
           : 'none',
+      py: a.yin === answer[i].yin
+        ? 'exact'
+        : includesAndRemove(unmatched.py, a.yin)
+          ? 'misplaced'
+          : 'none',
     }
   })
 }
@@ -149,8 +157,8 @@ export function checkHardMode(
   input: ParsedChar[],
   previousTries: { word: ParsedChar[]; result: MatchResult[] }[],
 ): boolean {
-  type Dim = 'char' | '_1' | '_2' | '_3' | 'tone'
-  const dims: Dim[] = ['char', '_1', '_2', '_3', 'tone']
+  type Dim = 'char' | '_1' | '_2' | '_3' | 'tone' | 'py'
+  const dims: Dim[] = ['char', '_1', '_2', '_3', 'tone', 'py']
 
   for (const dim of dims) {
     const exacts = new Map<number, string | number>()
@@ -158,7 +166,7 @@ export function checkHardMode(
 
     for (const t of previousTries) {
       for (let i = 0; i < WORD_LENGTH; i++) {
-        const val = dim === 'char' ? toSimplified(t.word[i].char) : t.word[i][dim]
+        const val = dim === 'char' ? toSimplified(t.word[i].char) : dim === 'py' ? t.word[i].yin : t.word[i][dim]
         const result = t.result[i][dim]
 
         if (val === '' || val === undefined)
@@ -173,14 +181,14 @@ export function checkHardMode(
     }
 
     for (const [pos, val] of exacts) {
-      const inputVal = dim === 'char' ? toSimplified(input[pos].char) : input[pos][dim]
+      const inputVal = dim === 'char' ? toSimplified(input[pos].char) : dim === 'py' ? input[pos].yin : input[pos][dim]
       if (inputVal !== val)
         return false
     }
 
     const inputCounts = new Map<string | number, number>()
     for (let i = 0; i < WORD_LENGTH; i++) {
-      const val = dim === 'char' ? toSimplified(input[i].char) : input[i][dim]
+      const val = dim === 'char' ? toSimplified(input[i].char) : dim === 'py' ? input[i].yin : input[i][dim]
       if (val === '' || val === undefined)
         continue
       inputCounts.set(val, (inputCounts.get(val) || 0) + 1)

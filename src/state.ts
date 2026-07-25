@@ -80,8 +80,13 @@ export function getSymbolState(symbol?: string | number, key?: '_1' | '_2' | 'to
       const w = t.word[i]
       const r = t.result[i]
       if (key) {
-        if (w[key] === symbol)
+        if (key === 'py') {
+          if (w.yin === symbol)
+            results.push(r.py)
+        }
+        else if (w[key] === symbol) {
           results.push(r[key])
+        }
       }
       else {
         if (w._1 === symbol)

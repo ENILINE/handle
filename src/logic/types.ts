@@ -19,6 +19,7 @@ export interface MatchResult {
   _1: MatchType
   _2: MatchType
   _3: MatchType
+  py: MatchType
   tone: MatchType
 }
 

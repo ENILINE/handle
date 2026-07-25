@@ -82,6 +82,7 @@ exports[`testAnswer 1`] = `
     "_2": "exact",
     "_3": "exact",
     "char": "exact",
+    "py": "exact",
     "tone": "exact",
   },
 ]
@@ -94,6 +95,7 @@ exports[`testAnswer 2`] = `
     "_2": "exact",
     "_3": "exact",
     "char": "none",
+    "py": "none",
     "tone": "exact",
   },
 ]

@@ -1,10 +1,14 @@
-//Although illegal idioms cannot pass in strict mode, for ease of understanding, the following test may contain illegal idioms.
+// Although illegal idioms cannot pass in strict mode, for ease of understanding, the following test may contain illegal idioms.
 import { describe, expect, it } from 'vitest'
 import { checkHardMode } from './utils'
 import type { MatchResult, ParsedChar } from './types'
 
 function pc(char: string, _1 = '', _2 = '', _3 = '', tone = 0): ParsedChar {
-  return { char, _1, _2, _3: _3 || undefined, parts: [_1, _2, _3].filter(Boolean), yin: '', tone }
+  return { char, _1, _2, _3: _3 || undefined, parts: [_1, _2, _3].filter(Boolean), yin: `${_1}${_2}${_3}`, tone }
+}
+
+function mr(overrides: Partial<MatchResult> = {}): MatchResult {
+  return { char: 'none', _1: 'none', _2: 'none', _3: 'none', py: 'none', tone: 'none', ...overrides }
 }
 
 describe('checkHardMode', () => {
@@ -17,11 +21,11 @@ describe('checkHardMode', () => {
     const prev = {
       word: [pc('一', 'y', 'i', '', 1), pc('举', 'j', 'v', '', 3), pc('三', 's', 'an', '', 1), pc('得', 'd', 'e', '', 2)],
       result: [
-        { char: 'exact', _1: 'exact', _2: 'exact', _3: 'none', tone: 'exact' },
-        { char: 'exact', _1: 'exact', _2: 'exact', _3: 'none', tone: 'exact' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'exact', _1: 'exact', _2: 'exact', _3: 'none', tone: 'exact' },
-      ] as MatchResult[],
+        mr({ char: 'exact' }),
+        mr({ char: 'exact' }),
+        mr(),
+        mr({ char: 'exact' }),
+      ],
     }
     const input = [pc('一', 'y', 'i', '', 1), pc('举', 'j', 'v', '', 3), pc('两', 'l', 'iang', '', 3), pc('得', 'd', 'e', '', 2)]
     expect(checkHardMode(input, [prev])).toBe(true)
@@ -31,11 +35,11 @@ describe('checkHardMode', () => {
     const prev = {
       word: [pc('一', 'y', 'i', '', 1), pc('举', 'j', 'v', '', 3), pc('三', 's', 'an', '', 1), pc('得', 'd', 'e', '', 2)],
       result: [
-        { char: 'exact', _1: 'exact', _2: 'exact', _3: 'none', tone: 'exact' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-      ] as MatchResult[],
+        mr({ char: 'exact' }),
+        mr(),
+        mr(),
+        mr(),
+      ],
     }
     const input = [pc('两', 'l', 'iang', '', 3), pc('举', 'j', 'v', '', 3), pc('三', 's', 'an', '', 1), pc('得', 'd', 'e', '', 2)]
     expect(checkHardMode(input, [prev])).toBe(false)
@@ -45,11 +49,11 @@ describe('checkHardMode', () => {
     const prev = {
       word: [pc('一', 'y', 'i', '', 1), pc('心', 'x', 'in', '', 1), pc('一', 'y', 'i', '', 1), pc('意', 'y', 'i', '', 4)],
       result: [
-        { char: 'exact', _1: 'exact', _2: 'exact', _3: 'none', tone: 'exact' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'misplaced', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-      ] as MatchResult[],
+        mr({ char: 'exact' }),
+        mr(),
+        mr({ char: 'misplaced' }),
+        mr(),
+      ],
     }
     // prev had two '一' (pos 0 exact + pos 2 misplaced). Input needs at least 2 '一'.
     const input = [pc('一', 'y', 'i', '', 1), pc('举', 'j', 'v', '', 3), pc('两', 'l', 'iang', '', 3), pc('得', 'd', 'e', '', 2)]
@@ -60,11 +64,11 @@ describe('checkHardMode', () => {
     const prev = {
       word: [pc('一', 'y', 'i', '', 1), pc('心', 'x', 'in', '', 1), pc('一', 'y', 'i', '', 1), pc('意', 'y', 'i', '', 4)],
       result: [
-        { char: 'exact', _1: 'exact', _2: 'exact', _3: 'none', tone: 'exact' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'misplaced', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-      ] as MatchResult[],
+        mr({ char: 'exact' }),
+        mr(),
+        mr({ char: 'misplaced' }),
+        mr(),
+      ],
     }
     // prev had two '一' → input must have at least 2 '一'
     const input = [pc('一', 'y', 'i', '', 1), pc('一', 'y', 'i', '', 1), pc('两', 'l', 'iang', '', 3), pc('得', 'd', 'e', '', 2)]
@@ -75,14 +79,29 @@ describe('checkHardMode', () => {
     const prev = {
       word: [pc('一', 'y', 'i', '', 1), pc('心', 'x', 'in', '', 1), pc('三', 's', 'an', '', 1), pc('意', 'y', 'i', '', 4)],
       result: [
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'misplaced', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-        { char: 'none', _1: 'none', _2: 'none', _3: 'none', tone: 'none' },
-      ] as MatchResult[],
+        mr(),
+        mr({ char: 'misplaced' }),
+        mr(),
+        mr(),
+      ],
     }
     // '心' was misplaced at pos 1, but it's allowed to stay at pos 1 in the new guess
     const input = [pc('一', 'y', 'i', '', 1), pc('心', 'x', 'in', '', 1), pc('两', 'l', 'iang', '', 3), pc('得', 'd', 'e', '', 2)]
     expect(checkHardMode(input, [prev])).toBe(true)
+  })
+
+  it('fails when py exact constraint is broken', () => {
+    const prev = {
+      word: [pc('八', 'b', 'a', '', 1), pc('举', 'j', 'v', '', 3), pc('三', 's', 'an', '', 1), pc('得', 'd', 'e', '', 2)],
+      result: [
+        mr({ char: 'none', py: 'exact' }),
+        mr(),
+        mr(),
+        mr(),
+      ],
+    }
+    // Position 0 had py exact (yin='ba'). Input has '一' (yin='yi') → violates py exact
+    const input = [pc('一', 'y', 'i', '', 1), pc('举', 'j', 'v', '', 3), pc('三', 's', 'an', '', 1), pc('得', 'd', 'e', '', 2)]
+    expect(checkHardMode(input, [prev])).toBe(false)
   })
 })

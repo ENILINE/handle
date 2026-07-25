@@ -54,6 +54,7 @@ const final = computed(() => ({ py: 'uo', zy: 'ㄨㄛ', sp: 'o' }[inputMode.valu
       {{ t('intro-13') }} <b op50>{{ t('intro-14') }}</b> {{ t('intro-15') }} <b op50>{{ t('intro-14') }}</b> {{ t('intro-16') }}
       {{ t('intro-17') }} <b text-mis>{{ final }}</b> {{ t('intro-19') }}
     </p>
+    <p max-w-130 mt2>{{ t('intro-21') }}</p>
 
     <WordBlocks my2 :word="t('example-4')" :revealed="true" answer="武运昌隆" />
     <p>{{ t('intro-20') }}</p>

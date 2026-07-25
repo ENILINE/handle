@@ -43,6 +43,16 @@ function getColor(result?: MatchType, isChar = false) {
   return `${pre} ${colors[result]}`
 }
 
+const pyUnderlineClass = computed(() => {
+  if (!props.answer || props.answer.char === 'exact')
+    return ''
+  if (props.answer.py === 'exact')
+    return 'border-b-3 border-double border-ok'
+  if (props.answer.py === 'misplaced')
+    return 'border-b-3 border-double border-mis'
+  return ''
+})
+
 const blockColor = computed(() => {
   if (!props.answer)
     return 'border-base'
@@ -132,6 +142,7 @@ const partTwo = computed(() => {
           <div
             relative ma items-start
             flex="~ x-center"
+            :class="pyUnderlineClass"
           >
             <div v-if="char._1" :class="getColor(parsed?._1)" mx-1px>
               {{ char._1 }}

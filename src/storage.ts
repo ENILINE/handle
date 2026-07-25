@@ -12,8 +12,8 @@ export const inputMode = useStorage<InputMode>('handle-mode', preferZhuyin ? 'zy
 export const spMode = useStorage<SpMode>('handle-sp-mode', 'sougou')
 export const colorblind = useStorage('handle-colorblind', false)
 export const useNoHint = useStorage('handle-hard-mode', false)
-export const useNumberTone = useStorage('handle-number-tone', false)
 export const useCheckAssist = useStorage('handle-check-assist', false)
+export const useNumberTone = useStorage('handle-number-tone', true)
 export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
 
 export function migrateGameMode() {
