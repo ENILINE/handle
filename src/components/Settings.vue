@@ -81,6 +81,8 @@ defineProps<{
         {{ t('check-assist') }}
         <div v-if="useCheckAssist" square-btn-mark />
       </button>
+    </div>
+    <div v-if="!lite" flex="~ center wrap">
       <div
         square-btn m2
         :class="!!meta.tries?.length ? 'op50 pointer-events-none' : ''"
@@ -106,9 +108,11 @@ defineProps<{
           {{ t('game-mode-strict') }}
         </button>
       </div>
+    </div>
+    <div v-if="!lite && playMode === 'random'" flex="~ center wrap">
       <div
-        v-if="playMode === 'random'"
         square-btn m2
+        :class="!!meta.tries?.length ? 'op50 pointer-events-none' : ''"
       >
         <button
           :class="frequencyLevel === 'common' ? 'text-primary' : 'op80'"

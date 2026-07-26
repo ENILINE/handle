@@ -11,18 +11,19 @@ function openHelp() {
   useMask.value = false
 }
 
-function switchToDaily() {
-  playMode.value = 'daily'
-  const url = new URL(window.location.href)
-  url.searchParams.delete('mode')
-  window.history.replaceState({}, '', url.toString())
-}
-
-function switchToRandom() {
-  playMode.value = 'random'
-  const url = new URL(window.location.href)
-  url.searchParams.set('mode', 'random')
-  window.history.replaceState({}, '', url.toString())
+function togglePlayMode() {
+  if (playMode.value === 'daily') {
+    playMode.value = 'random'
+    const url = new URL(window.location.href)
+    url.searchParams.set('mode', 'random')
+    window.history.replaceState({}, '', url.toString())
+  }
+  else {
+    playMode.value = 'daily'
+    const url = new URL(window.location.href)
+    url.searchParams.delete('mode')
+    window.history.replaceState({}, '', url.toString())
+  }
 }
 </script>
 
@@ -33,12 +34,6 @@ function switchToRandom() {
     </div>
     <div flex items-center justify-between md:max-w-md ma py4 px2>
       <div flex items-center>
-        <button icon-btn mx2 :class="playMode === 'daily' ? 'text-primary' : ''" @click="switchToDaily()">
-          <div i-carbon-calendar />
-        </button>
-        <button icon-btn mx2 :class="playMode === 'random' ? 'text-primary' : ''" @click="switchToRandom()">
-          <div i-ri-shuffle-line />
-        </button>
         <button icon-btn mx2 @click="openHelp()">
           <div i-carbon-help />
         </button>
@@ -50,6 +45,10 @@ function switchToRandom() {
         </button>
       </div>
       <div flex items-center>
+        <button icon-btn mx2 @click="togglePlayMode()">
+          <div v-if="playMode === 'daily'" i-ri-shuffle-line />
+          <div v-else i-carbon-calendar />
+        </button>
         <button icon-btn mx2 @click="toggleSettings()">
           <div i-carbon-settings />
         </button>

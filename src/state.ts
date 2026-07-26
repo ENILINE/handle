@@ -1,7 +1,7 @@
 import { breakpointsTailwind } from '@vueuse/core'
 import type { MatchType, ParsedChar } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
-import { playMode as _playMode, useNumberTone as _useNumberTone, frequencyLevel, inputMode, meta, spMode, tries } from './storage'
+import { playMode as _playMode, useNumberTone as _useNumberTone, frequencyLevel, inputMode, meta, randomMeta, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 
@@ -35,6 +35,7 @@ watch(_playMode, (v) => {
 export const randomSeed = ref(0)
 
 export function newRandomGame() {
+  randomMeta.value = {}
   randomSeed.value++
 }
 

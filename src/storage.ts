@@ -18,7 +18,6 @@ export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
 
 export const playMode = useStorage<PlayMode>('handle-play-mode', 'daily')
 export const frequencyLevel = useStorage<FrequencyLevel>('handle-frequency', 'common')
-export const randomTries = useStorage<string[]>('handle-random-tries', [])
 export const randomMeta = useStorage<TriesMeta>('handle-random-meta', {})
 
 export function migrateGameMode() {
@@ -59,8 +58,11 @@ export const meta = computed<TriesMeta>({
 
 export const tries = computed<string[]>({
   get() {
-    if (playMode.value === 'random')
-      return randomTries.value
+    if (playMode.value === 'random') {
+      if (!randomMeta.value.tries)
+        randomMeta.value.tries = []
+      return randomMeta.value.tries
+    }
     if (!meta.value.tries)
       meta.value.tries = []
     return legacyTries.value[dayNo.value] || meta.value.tries
