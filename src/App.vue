@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import '~/init'
-import { answer, dayNo, daySince, isDev } from '~/state'
+import { answer, dayNo, daySince, isDev, playMode } from '~/state'
 import { colorblind } from '~/storage'
 import { DAYS_PLAY_BACK } from '~/logic/constants'
 
@@ -17,8 +17,8 @@ watchEffect(() => {
     <Navbar />
     <div p="4">
       <NoQuizToday v-if="!answer.word" />
-      <NoFuturePlay v-else-if="dayNo > daySince && !isDev" />
-      <NoPastPlay v-else-if="daySince - dayNo > DAYS_PLAY_BACK && !isDev" />
+      <NoFuturePlay v-else-if="dayNo > daySince && !isDev && playMode === 'daily'" />
+      <NoPastPlay v-else-if="daySince - dayNo > DAYS_PLAY_BACK && !isDev && playMode === 'daily'" />
       <Play v-else />
     </div>
     <ModalsLayer />

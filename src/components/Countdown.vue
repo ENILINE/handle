@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { now } from '~/state'
+import { now, playMode } from '~/state'
 import { t } from '~/i18n'
 import { START_DATE, isDstObserved } from '~/logic'
 const ms = computed(() => 86400000 - ((isDstObserved(now.value) ? +now.value + 3600000 : +now.value) - +START_DATE) % 86400000)
@@ -12,7 +12,7 @@ const formatted = computed(() => {
 </script>
 
 <template>
-  <div pt12 pb16>
+  <div v-if="playMode === 'daily'" pt12 pb16>
     <div flex="~ col" items-center>
       <ShareButton m4 />
       <ToggleMask :hint="true" />

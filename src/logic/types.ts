@@ -4,6 +4,10 @@ export type InputMode = 'py' | 'zy' | 'sp'
 
 export type GameMode = 'normal' | 'unlimited' | 'strict'
 
+export type PlayMode = 'daily' | 'random'
+
+export type FrequencyLevel = 'common' | 'normal' | 'rare'
+
 export interface ParsedChar {
   char: string
   _1: string

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
-import { answer, dayNo, idiomSearchWord, isDev, isFailed, isFinished, parseWord, parsedTries, showCheatSheet, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
+import { answer, dayNo, idiomSearchWord, isDev, isFailed, isFinished, newRandomGame, parseWord, parsedTries, playMode, showCheatSheet, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
 import { gameMode, markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
@@ -173,6 +173,11 @@ watchEffect(() => {
           <div flex justify-center mt2>
             <button btn flex="~ gap-1 center" @click="idiomSearchWord = answer.word; showIdiomExplanation = true">
               <div i-carbon-book /> {{ t('idiom-explanation') }}
+            </button>
+          </div>
+          <div v-if="playMode === 'random'" flex justify-center mt2>
+            <button btn flex="~ gap-1 center" @click="reset(); newRandomGame()">
+              <div i-ri-shuffle-line /> {{ t('new-random-game') }}
             </button>
           </div>
           <Countdown />

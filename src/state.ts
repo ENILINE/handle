@@ -1,8 +1,9 @@
 import { breakpointsTailwind } from '@vueuse/core'
 import type { MatchType, ParsedChar } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
-import { useNumberTone as _useNumberTone, inputMode, meta, spMode, tries } from './storage'
+import { playMode as _playMode, useNumberTone as _useNumberTone, frequencyLevel, inputMode, meta, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
+import { getRandomAnswer } from './logic/random'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -23,6 +24,26 @@ export const useMask = ref(false)
 export const showIdiomExplanation = ref(false)
 export const idiomSearchWord = ref('')
 
+export const playMode = ref(_playMode.value)
+watch(playMode, (v) => {
+  _playMode.value = v
+})
+watch(_playMode, (v) => {
+  playMode.value = v
+})
+
+export const randomSeed = ref(0)
+
+export function newRandomGame() {
+  randomSeed.value++
+}
+
+export const randomAnswer = computed(() => {
+  // eslint-disable-next-line no-unused-expressions
+  randomSeed.value // dependency: regenerates when randomSeed changes
+  return getRandomAnswer(frequencyLevel.value)
+})
+
 export const useNumberTone = computed(() => {
   if (inputMode.value === 'sp')
     return true
@@ -38,15 +59,20 @@ export const daySince = useDebounce(computed(() => {
   const adjustedNow = isDstObserved(now.value) ? new Date(+now.value + 3600000) : now.value
   return Math.floor((+adjustedNow - +START_DATE) / 86400000)
 }))
+if (params.get('mode') === 'random')
+  playMode.value = 'random'
+
 export const dayNo = ref(+(params.get('d') || daySince.value))
 export const dayNoHanzi = computed(() => `${numberToHanzi(dayNo.value)}日`)
 export const answer = computed(() =>
-  params.get('word')
-    ? {
-        word: params.get('word')!,
-        hint: getHint(params.get('word')!),
-      }
-    : getAnswerOfDay(dayNo.value),
+  playMode.value === 'random'
+    ? randomAnswer.value
+    : params.get('word')
+      ? {
+          word: params.get('word')!,
+          hint: getHint(params.get('word')!),
+        }
+      : getAnswerOfDay(dayNo.value),
 )
 
 export const hint = computed(() => answer.value.hint)
@@ -73,7 +99,7 @@ export const parsedTries = computed(() => tries.value.map((i) => {
   }
 }))
 
-export function getSymbolState(symbol?: string | number, key?: '_1' | '_2' | 'tone') {
+export function getSymbolState(symbol?: string | number, key?: '_1' | '_2' | 'tone' | 'py') {
   const results: MatchType[] = []
   for (const t of parsedTries.value) {
     for (let i = 0; i < WORD_LENGTH; i++) {

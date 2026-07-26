@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { colorblind, gameMode, inputMode, meta, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
+import { colorblind, frequencyLevel, gameMode, inputMode, meta, playMode, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
 import { useNumberTone } from '~/state'
 import { locale, t } from '~/i18n'
 
@@ -104,6 +104,31 @@ defineProps<{
           @click="gameMode = 'strict'"
         >
           {{ t('game-mode-strict') }}
+        </button>
+      </div>
+      <div
+        v-if="playMode === 'random'"
+        square-btn m2
+      >
+        <button
+          :class="frequencyLevel === 'common' ? 'text-primary' : 'op80'"
+          @click="frequencyLevel = 'common'"
+        >
+          {{ t('frequency-common') }}
+        </button>
+        <div w-1px h-4 border="r base" />
+        <button
+          :class="frequencyLevel === 'normal' ? 'text-primary' : 'op80'"
+          @click="frequencyLevel = 'normal'"
+        >
+          {{ t('frequency-normal') }}
+        </button>
+        <div w-1px h-4 border="r base" />
+        <button
+          :class="frequencyLevel === 'rare' ? 'text-primary' : 'op80'"
+          @click="frequencyLevel = 'rare'"
+        >
+          {{ t('frequency-rare') }}
         </button>
       </div>
     </div>

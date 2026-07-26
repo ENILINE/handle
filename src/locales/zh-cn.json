@@ -116,5 +116,12 @@
   "game-mode-unlimited": "无限制模式",
   "game-mode-strict": "严格模式",
   "hard-mode-violation": "须使用已揭示的线索",
-  "duplicate-guess": "此成语已猜过"
+  "duplicate-guess": "此成语已猜过",
+  "play-mode-daily": "每日",
+  "play-mode-random": "随机",
+  "frequency-common": "常见",
+  "frequency-normal": "普通",
+  "frequency-rare": "罕见",
+  "new-random-game": "换一题",
+  "random-mode": "随机模式"
 }

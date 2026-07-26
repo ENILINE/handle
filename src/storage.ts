@@ -1,7 +1,7 @@
 import type { SpMode } from '@hankit/tools'
 import { preferZhuyin, t } from './i18n'
 import { dayNo } from './state'
-import type { GameMode, InputMode, TriesMeta } from './logic'
+import type { FrequencyLevel, GameMode, InputMode, PlayMode, TriesMeta } from './logic'
 
 export const legacyTries = useStorage<Record<number, string[]>>('handle-tries', {})
 
@@ -15,6 +15,11 @@ export const useNoHint = useStorage('handle-hard-mode', false)
 export const useCheckAssist = useStorage('handle-check-assist', false)
 export const useNumberTone = useStorage('handle-number-tone', true)
 export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
+
+export const playMode = useStorage<PlayMode>('handle-play-mode', 'daily')
+export const frequencyLevel = useStorage<FrequencyLevel>('handle-frequency', 'common')
+export const randomTries = useStorage<string[]>('handle-random-tries', [])
+export const randomMeta = useStorage<TriesMeta>('handle-random-meta', {})
 
 export function migrateGameMode() {
   const NEW_KEY = 'handle-game-mode'
@@ -38,17 +43,24 @@ export const acceptCollecting = useStorage('handle-accept-collecting', true)
 
 export const meta = computed<TriesMeta>({
   get() {
+    if (playMode.value === 'random')
+      return randomMeta.value
     if (!(dayNo.value in history.value))
       history.value[dayNo.value] = {}
     return history.value[dayNo.value]
   },
   set(v) {
-    history.value[dayNo.value] = v
+    if (playMode.value === 'random')
+      randomMeta.value = v
+    else
+      history.value[dayNo.value] = v
   },
 })
 
 export const tries = computed<string[]>({
   get() {
+    if (playMode.value === 'random')
+      return randomTries.value
     if (!meta.value.tries)
       meta.value.tries = []
     return legacyTries.value[dayNo.value] || meta.value.tries
