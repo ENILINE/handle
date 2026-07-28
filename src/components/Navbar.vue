@@ -46,8 +46,8 @@ function togglePlayMode() {
       </div>
       <div flex items-center>
         <button icon-btn mx2 @click="togglePlayMode()">
-          <div v-if="playMode === 'daily'" i-ri-shuffle-line />
-          <div v-else i-carbon-calendar />
+          <div v-if="playMode === 'daily'" i-carbon-calendar />
+          <div v-else i-ri-shuffle-line />
         </button>
         <button icon-btn mx2 @click="toggleSettings()">
           <div i-carbon-settings />

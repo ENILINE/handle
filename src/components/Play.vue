@@ -94,7 +94,7 @@ watchEffect(() => {
 <template>
   <div>
     <div flex="~ col" pt4 items-center>
-      <WordBlocks v-for="w, i of tries" :key="i" :word="w" :revealed="true" @click="focus()" />
+      <WordBlocks v-for="w, i of tries" :key="playMode + '-' + i" :word="w" :revealed="true" @click="focus()" />
 
       <template v-if="meta.answer">
         <div my4>
@@ -180,6 +180,10 @@ watchEffect(() => {
               <div i-ri-shuffle-line /> {{ t('new-random-game') }}
             </button>
           </div>
+          <div v-if="playMode === 'random'" flex="~ col" items-center mt4>
+            <ShareButton m4 />
+            <ToggleMask />
+          </div>
           <Countdown />
         </div>
       </Transition>
@@ -189,6 +193,7 @@ watchEffect(() => {
         <div op50 mb-2>
           测试用
         </div>
+        <div>{{ answer.word }}</div>
         <div flex gap2>
           <a
             class="btn"

@@ -25,8 +25,12 @@ export const showIdiomExplanation = ref(false)
 export const idiomSearchWord = ref('')
 
 export const playMode = ref(_playMode.value)
+export const isSwitchingMode = ref(false)
 watch(playMode, (v) => {
   _playMode.value = v
+  useMask.value = false
+  isSwitchingMode.value = true
+  nextTick(() => { isSwitchingMode.value = false })
 })
 watch(_playMode, (v) => {
   playMode.value = v
@@ -38,6 +42,11 @@ export function newRandomGame() {
   randomMeta.value = {}
   randomSeed.value++
 }
+
+watch(frequencyLevel, () => {
+  if (playMode.value === 'random')
+    newRandomGame()
+})
 
 export const randomAnswer = computed(() => {
   // eslint-disable-next-line no-unused-expressions

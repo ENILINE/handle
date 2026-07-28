@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { t } from '~/i18n'
-import { answer, dayNoHanzi, isMobile, parseWord, testAnswer } from '~/state'
+import { answer, dayNoHanzi, isMobile, parseWord, playMode, testAnswer } from '~/state'
 import { meta, tries } from '~/storage'
+
+const shareHost = computed(() => playMode.value === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
+const dayLabel = computed(() => playMode.value === 'daily' ? dayNoHanzi.value : t('random-mode'))
 
 const lines = computed(() => {
   const table = tries.value.map((word) => {
@@ -28,14 +31,14 @@ const lines = computed(() => {
   return [
     [
       t('name'),
-      dayNoHanzi.value,
+      dayLabel.value,
       meta.value.strict && meta.value.strict !== 'normal' ? t(`game-mode-${meta.value.strict}`).slice(0, 2) : '',
       !meta.value.hint ? t('hint-level-none') : '',
     ].filter(Boolean).join(' · '),
     '',
     ...table,
     '',
-    'handle.antfu.me',
+    shareHost.value,
   ]
 })
 

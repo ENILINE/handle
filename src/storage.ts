@@ -17,7 +17,7 @@ export const useNumberTone = useStorage('handle-number-tone', true)
 export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
 
 export const playMode = useStorage<PlayMode>('handle-play-mode', 'daily')
-export const frequencyLevel = useStorage<FrequencyLevel>('handle-frequency', 'common')
+export const frequencyLevel = useStorage<FrequencyLevel>('handle-frequency', 'normal')
 export const randomMeta = useStorage<TriesMeta>('handle-random-meta', {})
 
 export function migrateGameMode() {

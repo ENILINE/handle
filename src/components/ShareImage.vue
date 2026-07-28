@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toPng } from 'html-to-image'
 import { saveAs } from 'file-saver'
-import { dayNoHanzi, isIOS, isMobile, useMask } from '~/state'
+import { dayNoHanzi, isIOS, isMobile, playMode, useMask } from '~/state'
 import { tries } from '~/storage'
 import { t } from '~/i18n'
 
@@ -11,6 +11,8 @@ const showDialog = ref(false)
 const dataUrlUnmasked = ref('')
 const dataUrlMasked = ref('')
 
+const downloadLabel = computed(() => playMode.value === 'daily' ? dayNoHanzi.value : t('random-mode'))
+const shareHost = computed(() => playMode.value === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
 const dataUrl = computed(() => useMask.value ? dataUrlMasked.value : dataUrlUnmasked.value)
 
 async function render() {
@@ -32,7 +34,7 @@ async function render() {
 onMounted(() => render())
 
 async function download() {
-  saveAs(dataUrl.value, `${t('name')} ${dayNoHanzi.value}${useMask.value ? ' 遮罩' : ''}.png`)
+  saveAs(dataUrl.value, `${t('name')} ${downloadLabel.value}${useMask.value ? ' 遮罩' : ''}.png`)
 }
 </script>
 
@@ -58,11 +60,12 @@ async function download() {
     <div ref="el" flex="~ col" items-center p="x6 y4" bg-base relative text-center>
       <AppName w-full />
       <div w-full text-xs mt1 mb3 op50 ws-nowrap>
-        handle.antfu.me
+        {{ shareHost }}
       </div>
 
       <WordBlocks v-for="w, i of tries" :key="i" :word="w" :revealed="true" :animate="false" />
-      <ResultFooter :day="true" mt3 w-full />
+      <div v-if="playMode === 'random'" op50 my1 text-sm>{{ t('random-mode') }}</div>
+      <ResultFooter :day="playMode === 'daily'" mt3 w-full />
     </div>
   </div>
 </template>

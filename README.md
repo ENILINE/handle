@@ -4,7 +4,7 @@
 
 A Chinese Hanzi variation of [Wordle](https://www.powerlanguage.co.uk/wordle/). 汉字 Wordle.
 
-基于 [antfu/handle](https://github.com/antfu/handle) 修改, **TODO**. 原站点 [handle.antfu.me](https://handle.antfu.me).
+基于 [antfu/handle](https://github.com/antfu/handle) 修改, **TODO**. 原站点 [handle.antfu.me](https://handle.antfu.me). 参考了 [YuukaBot](https://bot.yunmengdu.cn/).
 
 请勿剧透! PLEASE DO NOT SPOIL!
 
@@ -14,7 +14,7 @@ A Chinese Hanzi variation of [Wordle](https://www.powerlanguage.co.uk/wordle/). 
 - Run `pnpm install`
 - Run `pnpm dev` and visit `http://localhost:4444`
 
-## 成语勘误
+<!-- ## 成语勘误
 
 成语数据库储存于
 
@@ -23,7 +23,7 @@ A Chinese Hanzi variation of [Wordle](https://www.powerlanguage.co.uk/wordle/). 
 
 二者互不包含。
 
-如遇到成语缺失或发音错误，请编辑 [./src/data/new.txt](./src/data/new.txt) 文件，一行一词，完成后执行 `pnpm run update` 命令，脚本会自动抓取 [汉典](https://www.zdic.net/) 的数据更新成语数据库。如遇汉典中也缺失的成语，其会留存在 new.txt 中，需要手动判断与添加。
+如遇到成语缺失或发音错误，请编辑 [./src/data/new.txt](./src/data/new.txt) 文件，一行一词，完成后执行 `pnpm run update` 命令，脚本会自动抓取 [汉典](https://www.zdic.net/) 的数据更新成语数据库。如遇汉典中也缺失的成语，其会留存在 new.txt 中，需要手动判断与添加。 -->
 
 ## Tech Stack
 
