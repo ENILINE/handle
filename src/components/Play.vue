@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
-import { answer, dayNo, idiomSearchWord, isDev, isFailed, isFinished, newRandomGame, parseWord, parsedTries, playMode, showCheatSheet, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
+import { answer, customOrigin, dayNo, idiomSearchWord, isDev, isFailed, isFinished, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
 import { gameMode, markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
@@ -96,7 +96,7 @@ watchEffect(() => {
     <div flex="~ col" pt4 items-center>
       <WordBlocks v-for="w, i of tries" :key="playMode + '-' + i" :word="w" :revealed="true" @click="focus()" />
 
-      <template v-if="meta.answer">
+      <template v-if="meta.answer || showCustomAnswer">
         <div my4>
           <div font-serif p2>
             {{ t('correct-answer') }}
@@ -123,7 +123,7 @@ watchEffect(() => {
               v-model="inputValue"
               bg-transparent w-86 p3 outline-none text-center
               type="text"
-              autocomplete="false"
+              autocomplete="off"
               :placeholder="t('input-placeholder')"
               :disabled="isFinished"
               :class="{ shake }"
@@ -167,6 +167,28 @@ watchEffect(() => {
           </div>
         </div>
       </Transition>
+
+      <!-- Custom mode own: always-visible buttons -->
+      <div v-if="playMode === 'custom' && customOrigin === 'own'" mt4 flex="~ col" items-center gap-2>
+        <div flex gap-2>
+          <button
+            btn flex="~ gap-1 center"
+            @click="showCustomAnswer = !showCustomAnswer"
+          >
+            <div i-carbon-view /> {{ t('view-answer-custom') }}
+          </button>
+          <button
+            btn flex="~ gap-1 center"
+            @click="showCustomShare = true"
+          >
+            <div i-carbon-share /> {{ t('share-custom') }}
+          </button>
+        </div>
+        <button square-btn text-sm op50 @click="resetCustomGame()">
+          {{ t('recreate-custom') }}
+        </button>
+      </div>
+
       <Transition name="fade-in">
         <div v-if="isFinishedDelay && isFinished">
           <ResultFooter />
@@ -180,7 +202,7 @@ watchEffect(() => {
               <div i-ri-shuffle-line /> {{ t('new-random-game') }}
             </button>
           </div>
-          <div v-if="playMode === 'random'" flex="~ col" items-center mt4>
+          <div v-if="playMode === 'random' || (playMode === 'custom' && customOrigin === 'shared')" flex="~ col" items-center mt4>
             <ShareButton m4 />
             <ToggleMask />
           </div>

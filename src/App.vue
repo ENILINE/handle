@@ -16,7 +16,8 @@ watchEffect(() => {
     <NotTodayBanner v-if="dayNo < daySince" />
     <Navbar />
     <div p="4">
-      <NoQuizToday v-if="!answer.word" />
+      <CustomCreate v-if="playMode === 'custom' && !answer.word" />
+      <NoQuizToday v-else-if="!answer.word" />
       <NoFuturePlay v-else-if="dayNo > daySince && !isDev && playMode === 'daily'" />
       <NoPastPlay v-else-if="daySince - dayNo > DAYS_PLAY_BACK && !isDev && playMode === 'daily'" />
       <Play v-else />

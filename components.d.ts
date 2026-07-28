@@ -12,6 +12,8 @@ declare module '@vue/runtime-core' {
     CheatSheet: typeof import('./src/components/CheatSheet.vue')['default']
     Confetti: typeof import('./src/components/Confetti.vue')['default']
     Countdown: typeof import('./src/components/Countdown.vue')['default']
+    CustomCreate: typeof import('./src/components/CustomCreate.vue')['default']
+    CustomShare: typeof import('./src/components/CustomShare.vue')['default']
     Dashboard: typeof import('./src/components/Dashboard.vue')['default']
     DashboardItem: typeof import('./src/components/DashboardItem.vue')['default']
     FailedPage: typeof import('./src/components/FailedPage.vue')['default']

@@ -123,5 +123,18 @@
   "frequency-normal": "普通",
   "frequency-rare": "罕见",
   "new-random-game": "换一题",
-  "random-mode": "随机模式"
+  "random-mode": "随机模式",
+  "custom-mode": "自定义模式",
+  "create-custom-placeholder": "输入四字成语...",
+  "create-custom-confirm": "开始出题",
+  "share-custom": "分享题目",
+  "share-custom-link": "复制链接",
+  "share-custom-copied": "链接已复制到剪贴板",
+  "share-custom-hint": "提示字（留空为无提示）",
+  "share-custom-tries": "包含残局（最多9个）",
+  "share-custom-select-all": "全选",
+  "share-custom-select-none": "全不选",
+  "view-answer-custom": "查看答案",
+  "recreate-custom": "重新出题",
+  "invalid-hint-char": "提示字不在成语中"
 }

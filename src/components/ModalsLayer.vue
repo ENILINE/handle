@@ -3,6 +3,7 @@ import {
   breakpoints,
   idiomSearchWord,
   showCheatSheet,
+  showCustomShare,
   showDashboard,
   showFailed,
   showHelp,
@@ -40,6 +41,9 @@ const lg = breakpoints.lg
   </Modal>
   <Modal v-model="showVariants" direction="top">
     <VariantLinks />
+  </Modal>
+  <Modal v-model="showCustomShare" direction="top">
+    <CustomShare />
   </Modal>
   <Modal v-model="showIdiomExplanation" direction="top">
     <IdiomExplanation :word="idiomSearchWord" />

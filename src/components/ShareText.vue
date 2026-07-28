@@ -4,7 +4,11 @@ import { answer, dayNoHanzi, isMobile, parseWord, playMode, testAnswer } from '~
 import { meta, tries } from '~/storage'
 
 const shareHost = computed(() => playMode.value === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
-const dayLabel = computed(() => playMode.value === 'daily' ? dayNoHanzi.value : t('random-mode'))
+const dayLabel = computed(() => {
+  if (playMode.value === 'daily') return dayNoHanzi.value
+  if (playMode.value === 'random') return t('random-mode')
+  return t('custom-mode')
+})
 
 const lines = computed(() => {
   const table = tries.value.map((word) => {

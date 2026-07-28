@@ -11,7 +11,11 @@ const showDialog = ref(false)
 const dataUrlUnmasked = ref('')
 const dataUrlMasked = ref('')
 
-const downloadLabel = computed(() => playMode.value === 'daily' ? dayNoHanzi.value : t('random-mode'))
+const downloadLabel = computed(() => {
+  if (playMode.value === 'daily') return dayNoHanzi.value
+  if (playMode.value === 'random') return t('random-mode')
+  return t('custom-mode')
+})
 const shareHost = computed(() => playMode.value === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
 const dataUrl = computed(() => useMask.value ? dataUrlMasked.value : dataUrlUnmasked.value)
 
@@ -64,7 +68,7 @@ async function download() {
       </div>
 
       <WordBlocks v-for="w, i of tries" :key="i" :word="w" :revealed="true" :animate="false" />
-      <div v-if="playMode === 'random'" op50 my1 text-sm>{{ t('random-mode') }}</div>
+      <div v-if="playMode !== 'daily'" op50 my1 text-sm>{{ playMode === 'random' ? t('random-mode') : t('custom-mode') }}</div>
       <ResultFooter :day="playMode === 'daily'" mt3 w-full />
     </div>
   </div>

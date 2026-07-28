@@ -4,9 +4,17 @@ export type InputMode = 'py' | 'zy' | 'sp'
 
 export type GameMode = 'normal' | 'unlimited' | 'strict'
 
-export type PlayMode = 'daily' | 'random'
+export type PlayMode = 'daily' | 'random' | 'custom'
 
 export type FrequencyLevel = 'common' | 'normal' | 'rare'
+
+export interface CustomPayload {
+  a: string
+  s: 'own' | 'shared'
+  m?: GameMode
+  h?: string
+  t?: string[]
+}
 
 export interface ParsedChar {
   char: string

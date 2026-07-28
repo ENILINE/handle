@@ -12,18 +12,20 @@ function openHelp() {
 }
 
 function togglePlayMode() {
+  const url = new URL(window.location.href)
   if (playMode.value === 'daily') {
     playMode.value = 'random'
-    const url = new URL(window.location.href)
     url.searchParams.set('mode', 'random')
-    window.history.replaceState({}, '', url.toString())
+  }
+  else if (playMode.value === 'random') {
+    playMode.value = 'custom'
+    url.searchParams.delete('mode')
   }
   else {
     playMode.value = 'daily'
-    const url = new URL(window.location.href)
     url.searchParams.delete('mode')
-    window.history.replaceState({}, '', url.toString())
   }
+  window.history.replaceState({}, '', url.toString())
 }
 </script>
 
@@ -47,7 +49,8 @@ function togglePlayMode() {
       <div flex items-center>
         <button icon-btn mx2 @click="togglePlayMode()">
           <div v-if="playMode === 'daily'" i-carbon-calendar />
-          <div v-else i-ri-shuffle-line />
+          <div v-else-if="playMode === 'random'" i-ri-shuffle-line />
+          <div v-else i-carbon-edit />
         </button>
         <button icon-btn mx2 @click="toggleSettings()">
           <div i-carbon-settings />

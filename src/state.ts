@@ -1,9 +1,11 @@
 import { breakpointsTailwind } from '@vueuse/core'
 import type { MatchType, ParsedChar } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
-import { playMode as _playMode, useNumberTone as _useNumberTone, frequencyLevel, inputMode, meta, randomMeta, spMode, tries } from './storage'
+import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
+import { decodeCustom, encodeCustom } from './logic/encode'
+import type { CustomPayload } from './logic/types'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -23,6 +25,8 @@ export const showShareDialog = ref(false)
 export const useMask = ref(false)
 export const showIdiomExplanation = ref(false)
 export const idiomSearchWord = ref('')
+export const showCustomShare = ref(false)
+export const showCustomAnswer = ref(false)
 
 export const playMode = ref(_playMode.value)
 export const isSwitchingMode = ref(false)
@@ -69,30 +73,64 @@ export const daySince = useDebounce(computed(() => {
   const adjustedNow = isDstObserved(now.value) ? new Date(+now.value + 3600000) : now.value
   return Math.floor((+adjustedNow - +START_DATE) / 86400000)
 }))
-if (params.get('mode') === 'random')
+
+// Custom mode: decode URL param
+const customParam = params.get('custom')
+const customPayload = ref<CustomPayload | null>(customParam ? decodeCustom(customParam) : null)
+
+export const customOrigin = computed(() => customPayload.value?.s || 'own')
+
+if (customPayload.value) {
+  playMode.value = 'custom'
+  // Pre-load shared state
+  if (customPayload.value.m)
+    _gameMode.value = customPayload.value.m
+  if (customPayload.value.t && customPayload.value.t.length > 0) {
+    customMeta.value = { tries: customPayload.value.t }
+  }
+}
+
+if (params.get('mode') === 'random' && !customPayload.value)
   playMode.value = 'random'
 
 export const dayNo = ref(+(params.get('d') || daySince.value))
 export const dayNoHanzi = computed(() => `${numberToHanzi(dayNo.value)}日`)
-export const answer = computed(() =>
-  playMode.value === 'random'
-    ? randomAnswer.value
-    : params.get('word')
-      ? {
-          word: params.get('word')!,
-          hint: getHint(params.get('word')!),
-        }
-      : getAnswerOfDay(dayNo.value),
-)
 
-export const hint = computed(() => answer.value.hint)
-export const parsedAnswer = computed(() => parseWord(answer.value.word))
+export const answer = computed(() => {
+  if (playMode.value === 'custom') {
+    if (!customPayload.value?.a)
+      return { word: '', hint: '' }
+    return {
+      word: customPayload.value.a,
+      hint: customPayload.value.h || getHint(customPayload.value.a),
+    }
+  }
+  if (playMode.value === 'random')
+    return randomAnswer.value
+  if (params.get('word'))
+    return {
+      word: params.get('word')!,
+      hint: getHint(params.get('word')!),
+    }
+  return getAnswerOfDay(dayNo.value)
+})
+
+export const hint = computed(() => answer.value?.hint || '')
+export const parsedAnswer = computed(() => answer.value?.word ? parseWord(answer.value.word) : [] as unknown as ReturnType<typeof parseWord>)
 
 export const isPassed = computed(() => meta.value.passed || (tries.value.length && checkPass(testAnswer(parseWord(tries.value[tries.value.length - 1])))))
-export const isFailed = computed(() => !isPassed.value && tries.value.length >= TRIES_LIMIT)
-export const isFinished = computed(() => isPassed.value || meta.value.answer)
+export const isFailed = computed(() => {
+  if (playMode.value === 'custom' && customOrigin.value === 'own')
+    return false
+  return !isPassed.value && tries.value.length >= TRIES_LIMIT
+})
+export const isFinished = computed(() => {
+  if (playMode.value === 'custom' && customOrigin.value === 'own')
+    return isPassed.value
+  return isPassed.value || meta.value.answer
+})
 
-export function parseWord(word: string, _ans = answer.value.word, mode = inputMode.value, spM = spMode.value) {
+export function parseWord(word: string, _ans: string = answer.value?.word || '', mode = inputMode.value, spM = spMode.value) {
   return _parseWord(word, _ans, mode, spM)
 }
 
@@ -141,4 +179,25 @@ export function getSymbolState(symbol?: string | number, key?: '_1' | '_2' | 'to
   if (results.includes('none'))
     return 'none'
   return null
+}
+
+// Custom mode actions
+export function newCustomGame(payload: CustomPayload) {
+  customMeta.value = {}
+  customPayload.value = payload
+  const encoded = encodeCustom(payload)
+  const url = new URL(window.location.href)
+  url.search = ''
+  url.searchParams.set('custom', encoded)
+  window.history.replaceState({}, '', url.toString())
+}
+
+export function resetCustomGame() {
+  customMeta.value = {}
+  customPayload.value = null
+  showCustomAnswer.value = false
+  const url = new URL(window.location.href)
+  url.search = ''
+  url.searchParams.set('mode', 'custom')
+  window.history.replaceState({}, '', url.toString())
 }

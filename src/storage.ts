@@ -19,6 +19,7 @@ export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
 export const playMode = useStorage<PlayMode>('handle-play-mode', 'daily')
 export const frequencyLevel = useStorage<FrequencyLevel>('handle-frequency', 'normal')
 export const randomMeta = useStorage<TriesMeta>('handle-random-meta', {})
+export const customMeta = useStorage<TriesMeta>('handle-custom-meta', {})
 
 export function migrateGameMode() {
   const NEW_KEY = 'handle-game-mode'
@@ -42,6 +43,8 @@ export const acceptCollecting = useStorage('handle-accept-collecting', true)
 
 export const meta = computed<TriesMeta>({
   get() {
+    if (playMode.value === 'custom')
+      return customMeta.value
     if (playMode.value === 'random')
       return randomMeta.value
     if (!(dayNo.value in history.value))
@@ -49,7 +52,9 @@ export const meta = computed<TriesMeta>({
     return history.value[dayNo.value]
   },
   set(v) {
-    if (playMode.value === 'random')
+    if (playMode.value === 'custom')
+      customMeta.value = v
+    else if (playMode.value === 'random')
       randomMeta.value = v
     else
       history.value[dayNo.value] = v
@@ -58,6 +63,11 @@ export const meta = computed<TriesMeta>({
 
 export const tries = computed<string[]>({
   get() {
+    if (playMode.value === 'custom') {
+      if (!customMeta.value.tries)
+        customMeta.value.tries = []
+      return customMeta.value.tries
+    }
     if (playMode.value === 'random') {
       if (!randomMeta.value.tries)
         randomMeta.value.tries = []
