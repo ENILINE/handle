@@ -64,9 +64,6 @@ const final = computed(() => ({ py: 'uo', zy: 'ㄨㄛ', sp: 'o' }[inputMode.valu
     <button btn p="x4 y2" @click="start()">
       <span tracking-1 pl1>{{ t('start') }}</span>
     </button>
-    <div op50>
-      {{ t('update-tip') }}
-    </div>
 
     <div h-1px w-10 border="b base" m4 />
 
