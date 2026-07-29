@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import {
+  answer,
   breakpoints,
   idiomSearchWord,
   showCheatSheet,
+  showCustomAnswer,
   showCustomShare,
   showDashboard,
   showFailed,
@@ -13,6 +15,7 @@ import {
   showShareDialog,
   showVariants,
 } from '~/state'
+import { t } from '~/i18n'
 
 const lg = breakpoints.lg
 </script>
@@ -41,6 +44,12 @@ const lg = breakpoints.lg
   </Modal>
   <Modal v-model="showVariants" direction="top">
     <VariantLinks />
+  </Modal>
+  <Modal v-model="showCustomAnswer" direction="top">
+    <div p8 flex="~ col" items-center gap-4>
+      <p text-xl font-serif><b>{{ t('correct-answer') }}</b></p>
+      <WordBlocks :word="answer.word" />
+    </div>
   </Modal>
   <Modal v-model="showCustomShare" direction="top">
     <CustomShare />

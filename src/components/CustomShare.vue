@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GameMode } from '~/logic/types'
-import { answer, isPassed, parseWord, showCustomShare } from '~/state'
+import { answer, isPassed, showCustomShare } from '~/state'
 import { gameMode, tries as triesRef } from '~/storage'
 import { t } from '~/i18n'
 import { encodeCustom } from '~/logic/encode'
@@ -75,8 +75,7 @@ function copyLink() {
   }
   if (shareMode.value !== 'normal')
     payload.m = shareMode.value
-  if (hintChar.value)
-    payload.h = hintChar.value
+  payload.h = hintChar.value
   const triesToInclude = allTries.value.filter((_, i: number) => selectedTries.value[i])
   if (triesToInclude.length > 0)
     payload.t = triesToInclude
@@ -101,9 +100,8 @@ function copyLink() {
       <b>{{ t('share-custom') }}</b>
     </p>
 
-    <!-- Mode selector -->
-    <div>
-      <div mb2 op50 text-sm>{{ t('game-mode-normal') }} / {{ t('game-mode-unlimited') }} / {{ t('game-mode-strict') }}</div>
+    <!-- Mode selector (only before first guess) -->
+    <div v-if="!hasTries">
       <div square-btn>
         <button :class="shareMode === 'unlimited' ? 'text-primary' : 'op80'" @click="shareMode = 'unlimited'">
           {{ t('game-mode-unlimited') }}

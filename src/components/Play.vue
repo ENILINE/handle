@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
-import { answer, customOrigin, dayNo, idiomSearchWord, isDev, isFailed, isFinished, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
+import { answer, customOrigin, dayNo, hint, idiomSearchWord, isDev, isFailed, isFinished, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation } from '~/state'
 import { gameMode, markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
@@ -13,6 +13,14 @@ const shake = autoResetRef(false, 500)
 
 const toastKey = ref<'invalid-idiom' | 'hard-mode-violation' | 'duplicate-guess'>('invalid-idiom')
 const isFinishedDelay = debouncedRef(isFinished, 800)
+
+const hintHidden = computed(() => {
+  if (playMode.value === 'custom') {
+    if (customOrigin.value === 'own') return true
+    if (customOrigin.value === 'shared' && !hint.value) return true
+  }
+  return false
+})
 
 function enter() {
   if (input.value.length !== WORD_LENGTH)
@@ -66,7 +74,7 @@ function handleInput(e: Event) {
 function focus() {
   el.value?.focus()
 }
-function hint() {
+function hintFn() {
   meta.value.hint = true
   if (!meta.value.hintLevel)
     meta.value.hintLevel = 1
@@ -96,7 +104,7 @@ watchEffect(() => {
     <div flex="~ col" pt4 items-center>
       <WordBlocks v-for="w, i of tries" :key="playMode + '-' + i" :word="w" :revealed="true" @click="focus()" />
 
-      <template v-if="meta.answer || showCustomAnswer">
+      <template v-if="meta.answer">
         <div my4>
           <div font-serif p2>
             {{ t('correct-answer') }}
@@ -158,7 +166,7 @@ watchEffect(() => {
           </button>
 
           <div flex="~ center" mt4 :class="isFinished ? 'op0! pointer-events-none' : ''">
-            <button v-if="!useNoHint" mx2 icon-btn text-base pb2 gap-1 flex="~ center" @click="hint()">
+            <button v-if="!useNoHint && !hintHidden" mx2 icon-btn text-base pb2 gap-1 flex="~ center" @click="hintFn()">
               <div i-carbon-idea /> {{ t('hint') }}
             </button>
             <button mx2 icon-btn text-base pb2 gap-1 flex="~ center" @click="sheet()">
@@ -173,7 +181,7 @@ watchEffect(() => {
         <div flex gap-2>
           <button
             btn flex="~ gap-1 center"
-            @click="showCustomAnswer = !showCustomAnswer"
+            @click="showCustomAnswer = true"
           >
             <div i-carbon-view /> {{ t('view-answer-custom') }}
           </button>
@@ -184,8 +192,8 @@ watchEffect(() => {
             <div i-carbon-share /> {{ t('share-custom') }}
           </button>
         </div>
-        <button square-btn text-sm op50 @click="resetCustomGame()">
-          {{ t('recreate-custom') }}
+        <button btn flex="~ gap-1 center" @click="resetCustomGame()">
+          <div i-ri-restart-line /> {{ t('recreate-custom') }}
         </button>
       </div>
 
@@ -200,6 +208,11 @@ watchEffect(() => {
           <div v-if="playMode === 'random'" flex justify-center mt2>
             <button btn flex="~ gap-1 center" @click="reset(); newRandomGame()">
               <div i-ri-shuffle-line /> {{ t('new-random-game') }}
+            </button>
+          </div>
+          <div v-if="playMode === 'custom' && customOrigin === 'shared'" flex justify-center mt2>
+            <button btn flex="~ gap-1 center" @click="resetCustomGame()">
+              <div i-ri-restart-line /> {{ t('recreate-custom') }}
             </button>
           </div>
           <div v-if="playMode === 'random' || (playMode === 'custom' && customOrigin === 'shared')" flex="~ col" items-center mt4>

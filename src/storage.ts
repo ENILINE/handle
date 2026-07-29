@@ -19,7 +19,26 @@ export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
 export const playMode = useStorage<PlayMode>('handle-play-mode', 'daily')
 export const frequencyLevel = useStorage<FrequencyLevel>('handle-frequency', 'normal')
 export const randomMeta = useStorage<TriesMeta>('handle-random-meta', {})
-export const customMeta = useStorage<TriesMeta>('handle-custom-meta', {})
+const _customOwnMeta = useStorage<TriesMeta>('handle-custom-own', {})
+const _customSharedMeta = useStorage<TriesMeta>('handle-custom-shared', {})
+export const customMeta = computed<TriesMeta>({
+  get() {
+    // Use URL param to determine which storage to read
+    const params = new URLSearchParams(window.location.search)
+    const cp = params.get('custom')
+    if (cp)
+      return _customSharedMeta.value
+    return _customOwnMeta.value
+  },
+  set(v) {
+    const params = new URLSearchParams(window.location.search)
+    const cp = params.get('custom')
+    if (cp)
+      _customSharedMeta.value = v
+    else
+      _customOwnMeta.value = v
+  },
+})
 
 export function migrateGameMode() {
   const NEW_KEY = 'handle-game-mode'

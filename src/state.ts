@@ -100,9 +100,10 @@ export const answer = computed(() => {
   if (playMode.value === 'custom') {
     if (!customPayload.value?.a)
       return { word: '', hint: '' }
+    const hKey = customPayload.value && 'h' in customPayload.value
     return {
       word: customPayload.value.a,
-      hint: customPayload.value.h || getHint(customPayload.value.a),
+      hint: hKey ? (customPayload.value!.h || '') : getHint(customPayload.value!.a),
     }
   }
   if (playMode.value === 'random')
@@ -118,7 +119,7 @@ export const answer = computed(() => {
 export const hint = computed(() => answer.value?.hint || '')
 export const parsedAnswer = computed(() => answer.value?.word ? parseWord(answer.value.word) : [] as unknown as ReturnType<typeof parseWord>)
 
-export const isPassed = computed(() => meta.value.passed || (tries.value.length && checkPass(testAnswer(parseWord(tries.value[tries.value.length - 1])))))
+export const isPassed = computed(() => meta.value.passed || (tries.value.length > 0 && checkPass(testAnswer(parseWord(tries.value[tries.value.length - 1])))))
 export const isFailed = computed(() => {
   if (playMode.value === 'custom' && customOrigin.value === 'own')
     return false
@@ -127,7 +128,7 @@ export const isFailed = computed(() => {
 export const isFinished = computed(() => {
   if (playMode.value === 'custom' && customOrigin.value === 'own')
     return isPassed.value
-  return isPassed.value || meta.value.answer
+  return isPassed.value || !!meta.value.answer
 })
 
 export function parseWord(word: string, _ans: string = answer.value?.word || '', mode = inputMode.value, spM = spMode.value) {
