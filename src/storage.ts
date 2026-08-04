@@ -2,7 +2,6 @@ import type { SpMode } from '@hankit/tools'
 import { preferZhuyin, t } from './i18n'
 import { dayNo } from './state'
 import type { FrequencyLevel, GameMode, InputMode, PlayMode, TriesMeta } from './logic'
-
 export const legacyTries = useStorage<Record<number, string[]>>('handle-tries', {})
 
 export const history = useStorage<Record<number, TriesMeta>>('handle-tries-meta', {})
@@ -13,6 +12,7 @@ export const spMode = useStorage<SpMode>('handle-sp-mode', 'sougou')
 export const colorblind = useStorage('handle-colorblind', false)
 export const useNoHint = useStorage('handle-hard-mode', false)
 export const useCheckAssist = useStorage('handle-check-assist', false)
+export const showEval = useStorage('handle-show-eval', true)
 export const useNumberTone = useStorage('handle-number-tone', true)
 export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
 

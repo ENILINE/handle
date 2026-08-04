@@ -135,5 +135,11 @@
   "share-custom-select-none": "全不選",
   "view-answer-custom": "查看答案",
   "recreate-custom": "重新出題",
-  "invalid-hint-char": "提示字不在成語中"
+  "invalid-hint-char": "提示字不在成語中",
+  "eval-in-game": "評價",
+  "eval-brilliant": "絕妙",
+  "eval-excellent": "優秀",
+  "eval-good": "不錯",
+  "eval-mistake": "失誤",
+  "eval-incorrect": "錯誤"
 }

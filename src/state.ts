@@ -1,11 +1,12 @@
 import { breakpointsTailwind } from '@vueuse/core'
 import type { MatchType, ParsedChar } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
-import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, spMode, tries } from './storage'
+import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, showEval, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
+import { rate, createEvalState, updateState } from './logic/eval'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -202,3 +203,35 @@ export function resetCustomGame() {
   url.searchParams.set('mode', 'custom')
   window.history.replaceState({}, '', url.toString())
 }
+
+// ============ Evaluation ============
+
+export const evalState = ref<EvalState>(createEvalState())
+
+// Reset eval state when starting a new game
+watch([() => meta.value.tries?.length, playMode], ([len]) => {
+  if (len === 0 || len === undefined)
+    evalState.value = createEvalState()
+})
+
+export const triesRatings = computed(() => meta.value.ratings || [])
+
+// Rate each new guess after it's submitted
+watch(() => tries.value.length, (len, oldLen) => {
+  if (len <= 0 || !showEval.value) return
+
+  const prevLen = oldLen || 0
+  if (len <= prevLen) return
+
+  for (let i = prevLen; i < len; i++) {
+    const word = tries.value[i]
+    const parsed = parseWord(word)
+    const feedback = testAnswer(parsed)
+
+    const r = rate(evalState.value, word)
+    updateState(evalState.value, parsed, feedback)
+
+    if (!meta.value.ratings) meta.value.ratings = []
+    meta.value.ratings[i] = r
+  }
+})

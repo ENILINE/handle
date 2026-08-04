@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { colorblind, frequencyLevel, gameMode, inputMode, meta, playMode, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
+import { colorblind, frequencyLevel, gameMode, inputMode, meta, playMode, showEval, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
 import { useNumberTone } from '~/state'
 import { locale, t } from '~/i18n'
 
@@ -80,6 +80,14 @@ defineProps<{
       >
         {{ t('check-assist') }}
         <div v-if="useCheckAssist" square-btn-mark />
+      </button>
+      <button
+        square-btn m2
+        :class="showEval ? 'text-primary' : 'op80' "
+        @click="showEval = !showEval"
+      >
+        {{ t('eval-in-game') }}
+        <div v-if="showEval" square-btn-mark />
       </button>
     </div>
     <div v-if="!lite" flex="~ center wrap">

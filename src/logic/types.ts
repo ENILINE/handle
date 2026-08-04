@@ -35,6 +35,8 @@ export interface MatchResult {
   tone: MatchType
 }
 
+export type Rating = 'brilliant' | 'excellent' | 'good' | 'mistake' | 'incorrect'
+
 export interface TriesMeta {
   answer?: boolean
   start?: number
@@ -47,4 +49,5 @@ export interface TriesMeta {
   hintLevel?: number
   strict?: GameMode
   sent?: boolean
+  ratings?: Rating[]
 }
