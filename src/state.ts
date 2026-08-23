@@ -6,7 +6,8 @@ import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
-import { rate, createEvalState, updateState } from './logic/eval'
+import { rate, createEvalState, updateState, debugRate } from './logic/eval'
+import type { EvalDebugInfo, EvalState } from './logic/eval'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -216,6 +217,8 @@ watch([() => meta.value.tries?.length, playMode], ([len]) => {
 
 export const triesRatings = computed(() => meta.value.ratings || [])
 
+export const lastEvalDebug = ref<EvalDebugInfo | null>(null)
+
 // Rate each new guess after it's submitted
 watch(() => tries.value.length, (len, oldLen) => {
   if (len <= 0 || !showEval.value) return
@@ -229,6 +232,11 @@ watch(() => tries.value.length, (len, oldLen) => {
     const feedback = testAnswer(parsed)
 
     const r = rate(evalState.value, word)
+
+    // Store debug info BEFORE updating state (pre-guess perspective)
+    if (isDev)
+      lastEvalDebug.value = debugRate(evalState.value, word)
+
     updateState(evalState.value, parsed, feedback)
 
     if (!meta.value.ratings) meta.value.ratings = []

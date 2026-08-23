@@ -92,8 +92,11 @@ for (let i = 0; i < SAMPLE_SIZE && i < indices.length; i++) {
 console.log(`Sampling ${SAMPLE_SIZE} idioms...`)
 
 const sampled = []
+const sampledWords = []
 for (let s = 0; s < SAMPLE_SIZE; s++) {
   const line = lines[indices[s]]
+  const obj = JSON.parse(line)
+  sampledWords.push(obj.word.join(''))
   const pairs = parseIdiom(line)
   // Flatten pairs into [count, elem0, mask0, elem1, mask1, ...]
   const flat = [pairs.length]
@@ -114,6 +117,9 @@ export const ELEMENTS = ${JSON.stringify(ELEMENTS)} as const
 // count = number of unique elements in the idiom
 // bitmask: bit 0 = position 1, bit 1 = position 2, bit 2 = position 3, bit 3 = position 4
 export const SAMPLED_DATA: number[] = ${JSON.stringify(sampled.flat())}
+
+// The actual word strings for the sampled idioms (for debug display)
+export const SAMPLED_WORDS: string[] = ${JSON.stringify(sampledWords)}
 
 export const SAMPLE_SIZE = ${SAMPLE_SIZE}
 `

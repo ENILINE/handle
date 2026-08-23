@@ -1,7 +1,7 @@
 import type { MatchResult, ParsedChar } from './types'
 import { getPinyin } from './idioms'
 import { WORD_LENGTH } from './constants'
-import { ELEMENTS, SAMPLED_DATA, SAMPLE_SIZE } from '../data/eval-data'
+import { ELEMENTS, SAMPLED_DATA, SAMPLED_WORDS, SAMPLE_SIZE } from '../data/eval-data'
 
 // ============ a.csv Z-count map ============
 // Number of idioms (out of 44010) WITHOUT this element
@@ -278,4 +278,53 @@ export function rate(state: EvalState, word: string): Rating {
   if (pct >= 0.70) return 'good'
   if (pct >= 0.40) return 'mistake'
   return 'incorrect'
+}
+
+// ============ Debug info ============
+
+export interface EvalDebugEntry {
+  word: string
+  ei: number
+}
+
+export interface EvalDebugInfo {
+  playerEI: number
+  rating: Rating
+  rank: number
+  total: number
+  sampled: EvalDebugEntry[]
+}
+
+/**
+ * Like rate(), but returns full debug info for the dev panel.
+ */
+export function debugRate(state: EvalState, word: string): EvalDebugInfo {
+  const playerEI = computeEI(state, word)
+  const sampled = getSampledIdioms()
+
+  const entries: EvalDebugEntry[] = []
+  let lowerCount = 0
+  for (let i = 0; i < sampled.length; i++) {
+    const ei = sampledEI(state, sampled[i])
+    entries.push({ word: SAMPLED_WORDS[i], ei })
+    if (ei < playerEI) lowerCount++
+  }
+
+  // Sort descending by EI
+  entries.sort((a, b) => b.ei - a.ei)
+
+  const pct = lowerCount / sampled.length
+  let rating: Rating = 'incorrect'
+  if (pct >= 0.99) rating = 'brilliant'
+  else if (pct >= 0.90) rating = 'excellent'
+  else if (pct >= 0.70) rating = 'good'
+  else if (pct >= 0.40) rating = 'mistake'
+
+  return {
+    playerEI,
+    rating,
+    rank: lowerCount,
+    total: sampled.length,
+    sampled: entries,
+  }
 }

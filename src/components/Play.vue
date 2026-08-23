@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
-import { answer, customOrigin, dayNo, hint, idiomSearchWord, isDev, isFailed, isFinished, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
+import { answer, customOrigin, dayNo, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
 import { gameMode, markStart, meta, showEval, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
@@ -253,6 +253,27 @@ watchEffect(() => {
             下一天
           </a>
         </div>
+
+        <!-- Eval debug -->
+        <template v-if="lastEvalDebug">
+          <div mt-6 mb-2 op50>
+            评价调试
+          </div>
+          <div text-sm>
+            本次 EI: {{ lastEvalDebug.playerEI.toFixed(3) }}
+            | 评价: {{ lastEvalDebug.rating }}
+            | 超过: {{ lastEvalDebug.rank }} / {{ lastEvalDebug.total }}
+            ({{ (lastEvalDebug.rank / lastEvalDebug.total * 100).toFixed(1) }}%)
+          </div>
+          <div mt-2 text-xs op50 max-h-100 overflow-auto w-full max-w-200>
+            <div v-for="(entry, idx) of lastEvalDebug.sampled" :key="idx" flex gap-2>
+              <span>{{ idx + 1 }}.</span>
+              <span>{{ entry.word }}</span>
+              <span op50>{{ entry.ei.toFixed(3) }}</span>
+              <span v-if="entry.ei < lastEvalDebug.playerEI" text-ok>◀</span>
+            </div>
+          </div>
+        </template>
       </template>
     </div>
   </div>

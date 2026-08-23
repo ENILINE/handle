@@ -19,13 +19,13 @@ const svgMap: Record<Rating, string> = {
   incorrect: incorrectSvg,
 }
 
-const labelMap: Record<Rating, string> = {
+const labelMap = {
   brilliant: 'eval-brilliant',
   excellent: 'eval-excellent',
   good: 'eval-good',
   mistake: 'eval-mistake',
   incorrect: 'eval-incorrect',
-}
+} as const
 </script>
 
 <template>
