@@ -1,13 +1,13 @@
 import { breakpointsTailwind } from '@vueuse/core'
 import type { MatchType, ParsedChar } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
-import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, showEval, spMode, tries } from './storage'
+import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
-import { rate, createEvalState, updateState, debugRate } from './logic/eval'
-import type { EvalDebugInfo, EvalState } from './logic/eval'
+import { EVAL_VERSION, canAppendEvaluation, canReuseRatings, createEvalState, evaluate, updateState } from './logic/eval'
+import type { EvalResult, EvalState } from './logic/eval'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -69,7 +69,7 @@ export const useNumberTone = computed(() => {
 })
 
 const params = new URLSearchParams(window.location.search)
-export const isDev = import.meta.hot || params.get('dev') === 'hey'
+export const isDev = !!import.meta.hot || params.get('dev') === 'hey'
 export const daySince = useDebounce(computed(() => {
   // Adjust date for daylight saving time, assuming START_DATE is not in DST
   const adjustedNow = isDstObserved(now.value) ? new Date(+now.value + 3600000) : now.value
@@ -208,38 +208,111 @@ export function resetCustomGame() {
 // ============ Evaluation ============
 
 export const evalState = ref<EvalState>(createEvalState())
+export const triesRatings = computed(() => meta.value.ratings || [])
+export const lastEvalDebug = ref<EvalResult | null>(null)
 
-// Reset eval state when starting a new game
-watch([() => meta.value.tries?.length, playMode], ([len]) => {
-  if (len === 0 || len === undefined)
-    evalState.value = createEvalState()
+const evalGameKey = computed(() => {
+  if (playMode.value === 'daily')
+    return `daily:${dayNo.value}:${answer.value.word}`
+  if (playMode.value === 'random')
+    return `random:${randomSeed.value}:${answer.value.word}`
+  return `custom:${customOrigin.value}:${answer.value.word}`
 })
 
-export const triesRatings = computed(() => meta.value.ratings || [])
+let evaluatedGameKey = ''
+let evaluatedWords: string[] = []
 
-export const lastEvalDebug = ref<EvalDebugInfo | null>(null)
-
-// Rate each new guess after it's submitted
-watch(() => tries.value.length, (len, oldLen) => {
-  if (len <= 0 || !showEval.value) return
-
-  const prevLen = oldLen || 0
-  if (len <= prevLen) return
-
-  for (let i = prevLen; i < len; i++) {
-    const word = tries.value[i]
+function evaluateAndApply(
+  state: EvalState,
+  word: string,
+  shouldEvaluate: boolean,
+  includeDebug: boolean,
+): EvalResult | null {
+  try {
+    const startedAt = performance.now()
     const parsed = parseWord(word)
     const feedback = testAnswer(parsed)
-
-    const r = rate(evalState.value, word)
-
-    // Store debug info BEFORE updating state (pre-guess perspective)
-    if (isDev)
-      lastEvalDebug.value = debugRate(evalState.value, word)
-
-    updateState(evalState.value, parsed, feedback)
-
-    if (!meta.value.ratings) meta.value.ratings = []
-    meta.value.ratings[i] = r
+    const result = shouldEvaluate ? evaluate(state, parsed, includeDebug) : null
+    const valid = updateState(state, parsed, feedback)
+    if (result) {
+      result.initialPosterior = state.initialRows.length
+      result.finalPosterior = state.finalRows.length
+      result.elapsedMs = performance.now() - startedAt
+    }
+    if (!valid && isDev)
+      console.warn('[evaluation] posterior became empty', { word, feedback })
+    return valid ? result : null
   }
-})
+  catch (error) {
+    state.valid = false
+    if (isDev)
+      console.warn('[evaluation] unsupported guess; evaluation disabled for this game', { word, error })
+    return null
+  }
+}
+
+function rebuildEvaluation(words: readonly string[]): void {
+  const state = createEvalState()
+  const storedRatingsAreCurrent = canReuseRatings(
+    meta.value.ratingsVersion,
+    meta.value.ratings?.length,
+    words.length,
+  )
+  const ratings = storedRatingsAreCurrent
+    ? [...meta.value.ratings!]
+    : Array.from({ length: words.length }, () => null)
+
+  lastEvalDebug.value = null
+  for (let index = 0; index < words.length; index++) {
+    const shouldEvaluate = !storedRatingsAreCurrent || (isDev && index === words.length - 1)
+    const result = evaluateAndApply(
+      state,
+      words[index],
+      shouldEvaluate,
+      isDev && index === words.length - 1,
+    )
+    if (!storedRatingsAreCurrent)
+      ratings[index] = result?.rating ?? null
+    else if (!state.valid)
+      ratings[index] = null
+    if (isDev && index === words.length - 1)
+      lastEvalDebug.value = result
+  }
+
+  evalState.value = state
+  meta.value.ratings = ratings
+  meta.value.ratingsVersion = EVAL_VERSION
+}
+
+function appendEvaluations(words: readonly string[]): void {
+  const ratings = meta.value.ratingsVersion === EVAL_VERSION
+    ? [...(meta.value.ratings || [])]
+    : []
+
+  for (let index = evaluatedWords.length; index < words.length; index++) {
+    const result = evaluateAndApply(evalState.value, words[index], true, isDev)
+    ratings[index] = result?.rating ?? null
+    if (isDev)
+      lastEvalDebug.value = result
+  }
+
+  meta.value.ratings = ratings
+  meta.value.ratingsVersion = EVAL_VERSION
+}
+
+watch(
+  [evalGameKey, () => tries.value.join('\u0000')],
+  ([gameKey]) => {
+    const words = [...tries.value]
+    const canAppend = canAppendEvaluation(evaluatedGameKey, evaluatedWords, gameKey, words)
+
+    if (canAppend)
+      appendEvaluations(words)
+    else if (gameKey !== evaluatedGameKey || words.join('\u0000') !== evaluatedWords.join('\u0000'))
+      rebuildEvaluation(words)
+
+    evaluatedGameKey = gameKey
+    evaluatedWords = words
+  },
+  { immediate: true, flush: 'sync' },
+)

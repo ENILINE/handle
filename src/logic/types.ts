@@ -49,5 +49,6 @@ export interface TriesMeta {
   hintLevel?: number
   strict?: GameMode
   sent?: boolean
-  ratings?: Rating[]
+  ratings?: Array<Rating | null>
+  ratingsVersion?: number
 }

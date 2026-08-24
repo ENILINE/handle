@@ -1,131 +1,137 @@
-import { readFileSync, writeFileSync } from 'fs'
-import { resolve, dirname } from 'path'
-import { fileURLToPath } from 'url'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
+const scriptDir = dirname(fileURLToPath(import.meta.url))
+const jsonlPath = resolve(scriptDir, '../playground/idioms.jsonl')
+const outputPath = resolve(scriptDir, '../src/data/eval-data.ts')
 
-// Read idioms.jsonl
-const jsonlPath = resolve(__dirname, '../playground/idioms.jsonl')
-const lines = readFileSync(jsonlPath, 'utf-8').trim().split('\n')
-console.log(`Read ${lines.length} idioms from jsonl`)
-
-// Element order (consistent with a.csv, excluding tones 0-4)
-// Initials: 24 elements
-// Finals: 34 elements
-const ELEMENTS = [
-  // initials (from a.csv)
-  'b', 'c', 'ch', 'd', 'f', 'g', 'h', 'j', 'k', 'l', 'm', 'n',
-  'null', 'p', 'q', 'r', 's', 'sh', 't', 'w', 'x', 'y', 'z', 'zh',
-  // finals (from a.csv)
-  'a', 'ai', 'an', 'ang', 'ao',
-  'e', 'ei', 'en', 'eng', 'er',
-  'i', 'ia', 'ian', 'iang', 'iao', 'ie', 'in', 'ing', 'iong', 'iu',
-  'o', 'ong', 'ou',
-  'u', 'ua', 'uai', 'uan', 'uang', 'ue', 'ui', 'un', 'uo',
-  'v', 've',
+const INITIALS = [
+  'null', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h',
+  'j', 'q', 'x', 'r', 'z', 'c', 's', 'zh', 'ch', 'sh', 'y', 'w',
 ]
 
-const elementIndex = new Map(ELEMENTS.map((e, i) => [e, i]))
-console.log(`Element count: ${ELEMENTS.length}`)
+const FINALS = [
+  'a', 'ai', 'an', 'ang', 'ao', 'e', 'ei', 'en', 'eng', 'er',
+  'i', 'ia', 'ian', 'iang', 'iao', 'ie', 'in', 'ing', 'iong', 'iu',
+  'o', 'ong', 'ou', 'u', 'ua', 'uai', 'uan', 'uang', 'ue', 'ui',
+  'un', 'uo', 'v', 've',
+]
 
-// Parse each idiom into {elementIndex, positionBitmask} pairs
-function parseIdiom(line) {
-  const obj = JSON.parse(line)
-  const elemMasks = new Map() // elementName → bitmask
-
-  for (let i = 0; i < 4; i++) {
-    const init = obj.initial[i]
-    const fin = obj.final[i]
-    const mask = 1 << i
-
-    // Add initial
-    if (elemMasks.has(init)) {
-      elemMasks.set(init, elemMasks.get(init) | mask)
-    } else {
-      elemMasks.set(init, mask)
-    }
-    // Add final
-    if (elemMasks.has(fin)) {
-      elemMasks.set(fin, elemMasks.get(fin) | mask)
-    } else {
-      elemMasks.set(fin, mask)
-    }
-  }
-
-  // Convert to [elemIndex, mask] pairs, sorted by elemIndex
-  const pairs = []
-  for (const [name, mask] of elemMasks) {
-    const idx = elementIndex.get(name)
-    if (idx !== undefined) {
-      pairs.push([idx, mask])
-    }
-  }
-  pairs.sort((a, b) => a[0] - b[0])
-  return pairs
-}
-
-// Sample 1000 random idioms (seeded)
-const SEED = 42
+const INITIAL_BITS = 5
+const FINAL_BITS = 6
 const SAMPLE_SIZE = 1000
+const SAMPLE_SEED = 42
 
-// Seeded random number generator (mulberry32)
-function mulberry32(a) {
-  return function() {
-    let t = a += 0x6D2B79F5
-    t = Math.imul(t ^ t >>> 15, t | 1)
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61)
-    return ((t ^ t >>> 14) >>> 0) / 4294967296
+const initialIndex = new Map(INITIALS.map((value, index) => [value, index]))
+const finalIndex = new Map(FINALS.map((value, index) => [value, index]))
+
+function splitPinyin(syllable) {
+  const base = syllable.replace(/[\d]$/, '')
+  const initials = [
+    'zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l',
+    'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's', 'w', 'y',
+  ]
+  for (const initial of initials) {
+    if (base.startsWith(initial))
+      return [initial, base.slice(initial.length)]
+  }
+  return ['null', base]
+}
+
+function packTuple(values, bits) {
+  let packed = 0
+  for (let position = 0; position < 4; position++)
+    packed |= values[position] << (position * bits)
+  return packed >>> 0
+}
+
+function encodeUint32(values) {
+  const buffer = Buffer.allocUnsafe(values.length * 4)
+  for (let index = 0; index < values.length; index++)
+    buffer.writeUInt32LE(values[index], index * 4)
+  return buffer.toString('base64')
+}
+
+function mulberry32(seed) {
+  return function random() {
+    let value = seed += 0x6D2B79F5
+    value = Math.imul(value ^ value >>> 15, value | 1)
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61)
+    return ((value ^ value >>> 14) >>> 0) / 4294967296
   }
 }
 
-const rng = mulberry32(SEED)
+const rows = readFileSync(jsonlPath, 'utf8')
+  .trim()
+  .split(/\r?\n/)
+  .map(line => JSON.parse(line))
 
-// Fisher-Yates shuffle (partial - only first SAMPLE_SIZE)
-const indices = Array.from({ length: lines.length }, (_, i) => i)
-for (let i = 0; i < SAMPLE_SIZE && i < indices.length; i++) {
-  const j = i + Math.floor(rng() * (indices.length - i))
-  const tmp = indices[i]
-  indices[i] = indices[j]
-  indices[j] = tmp
-}
+const initialTuples = new Uint32Array(rows.length)
+const finalTuples = new Uint32Array(rows.length)
 
-console.log(`Sampling ${SAMPLE_SIZE} idioms...`)
+for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+  const row = rows[rowIndex]
+  if (row.initial.length !== 4 || row.final.length !== 4 || row.word.length !== 4)
+    throw new Error(`Invalid idiom row ${rowIndex}`)
 
-const sampled = []
-const sampledWords = []
-for (let s = 0; s < SAMPLE_SIZE; s++) {
-  const line = lines[indices[s]]
-  const obj = JSON.parse(line)
-  sampledWords.push(obj.word.join(''))
-  const pairs = parseIdiom(line)
-  // Flatten pairs into [count, elem0, mask0, elem1, mask1, ...]
-  const flat = [pairs.length]
-  for (const [ei, mask] of pairs) {
-    flat.push(ei, mask)
+  for (let position = 0; position < 4; position++) {
+    const reconstructed = `${row.initial[position] === 'null' ? '' : row.initial[position]}${row.final[position]}${row.tone[position]}`
+    const parsed = splitPinyin(reconstructed)
+    if (parsed[0] !== row.initial[position] || parsed[1] !== row.final[position])
+      throw new Error(`Pinyin convention mismatch in ${row.word.join('')} at position ${position}`)
   }
-  sampled.push(flat)
+
+  const initials = row.initial.map((value) => {
+    const index = initialIndex.get(value)
+    if (index == null)
+      throw new Error(`Unknown initial ${value} in ${row.word.join('')}`)
+    return index
+  })
+  const finals = row.final.map((value) => {
+    const index = finalIndex.get(value)
+    if (index == null)
+      throw new Error(`Unknown final ${value} in ${row.word.join('')}`)
+    return index
+  })
+
+  initialTuples[rowIndex] = packTuple(initials, INITIAL_BITS)
+  finalTuples[rowIndex] = packTuple(finals, FINAL_BITS)
 }
 
-// Build output
-const tsContent = `// Auto-generated by scripts/generate-eval-data.mjs
+const random = mulberry32(SAMPLE_SEED)
+const indices = Array.from({ length: rows.length }, (_, index) => index)
+for (let index = 0; index < SAMPLE_SIZE; index++) {
+  const swapIndex = index + Math.floor(random() * (indices.length - index))
+  ;[indices[index], indices[swapIndex]] = [indices[swapIndex], indices[index]]
+}
+
+const sampledIndices = indices.slice(0, SAMPLE_SIZE)
+const sampledInitials = sampledIndices.map(index => initialTuples[index])
+const sampledFinals = sampledIndices.map(index => finalTuples[index])
+const sampledWords = sampledIndices.map(index => rows[index].word.join(''))
+
+const output = `// Auto-generated by scripts/generate-eval-data.mjs
 // Do not edit manually.
-// Contains ${SAMPLE_SIZE} randomly sampled idioms for evaluation ranking.
 
-export const ELEMENTS = ${JSON.stringify(ELEMENTS)} as const
-
-// Flat array: for each sampled idiom, [count, elemIdx, bitmask, elemIdx, bitmask, ...]
-// count = number of unique elements in the idiom
-// bitmask: bit 0 = position 1, bit 1 = position 2, bit 2 = position 3, bit 3 = position 4
-export const SAMPLED_DATA: number[] = ${JSON.stringify(sampled.flat())}
-
-// The actual word strings for the sampled idioms (for debug display)
-export const SAMPLED_WORDS: string[] = ${JSON.stringify(sampledWords)}
-
+export const EVAL_ROW_COUNT = ${rows.length}
 export const SAMPLE_SIZE = ${SAMPLE_SIZE}
+export const SAMPLE_SEED = ${SAMPLE_SEED}
+export const INITIAL_BITS = ${INITIAL_BITS}
+export const FINAL_BITS = ${FINAL_BITS}
+export const NULL_INITIAL_ID = ${initialIndex.get('null')}
+
+export const INITIALS = ${JSON.stringify(INITIALS)} as const
+export const FINALS = ${JSON.stringify(FINALS)} as const
+
+// Little-endian packed uint32 tuples, four element ids per tuple.
+export const INITIAL_TUPLES_BASE64 = '${encodeUint32(initialTuples)}'
+export const FINAL_TUPLES_BASE64 = '${encodeUint32(finalTuples)}'
+export const SAMPLED_INITIALS_BASE64 = '${encodeUint32(sampledInitials)}'
+export const SAMPLED_FINALS_BASE64 = '${encodeUint32(sampledFinals)}'
+export const SAMPLED_WORDS = ${JSON.stringify(sampledWords)} as const
 `
 
-const outPath = resolve(__dirname, '../src/data/eval-data.ts')
-writeFileSync(outPath, tsContent, 'utf-8')
-console.log(`Written to ${outPath}`)
-console.log(`Output size: ${(tsContent.length / 1024).toFixed(1)} KB`)
-console.log('Done!')
+writeFileSync(outputPath, output, 'utf8')
+console.log(`Generated ${rows.length} tuple rows and ${SAMPLE_SIZE} samples`)
+console.log(`Output: ${outputPath} (${(Buffer.byteLength(output) / 1024).toFixed(1)} KiB)`)

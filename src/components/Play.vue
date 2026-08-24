@@ -260,12 +260,17 @@ watchEffect(() => {
             评价调试
           </div>
           <div text-sm>
-            本次 EI: {{ lastEvalDebug.playerEI.toFixed(3) }}
+            本次联合熵: {{ lastEvalDebug.playerEI.toFixed(3) }}
             | 评价: {{ lastEvalDebug.rating }}
             | 超过: {{ lastEvalDebug.rank }} / {{ lastEvalDebug.total }}
             ({{ (lastEvalDebug.rank / lastEvalDebug.total * 100).toFixed(1) }}%)
           </div>
-          <div mt-2 text-xs op50 max-h-100 overflow-auto w-full max-w-200>
+          <div text-xs op50>
+            后验: 声母 {{ lastEvalDebug.initialPosterior }} / 韵母 {{ lastEvalDebug.finalPosterior }}
+            | 粒子: 声母 {{ lastEvalDebug.initialParticles }} / 韵母 {{ lastEvalDebug.finalParticles }}
+            | 耗时: {{ lastEvalDebug.elapsedMs.toFixed(1) }} ms
+          </div>
+          <div v-if="lastEvalDebug.sampled" mt-2 text-xs op50 max-h-100 overflow-auto w-full max-w-200>
             <div v-for="(entry, idx) of lastEvalDebug.sampled" :key="idx" flex gap-2>
               <span>{{ idx + 1 }}.</span>
               <span>{{ entry.word }}</span>
