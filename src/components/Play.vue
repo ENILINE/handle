@@ -269,6 +269,7 @@ watchEffect(() => {
                 <b>#{{ entry.guess }} {{ entry.word }}</b>
                 <span>I {{ entry.after.initialRows }} 行 / {{ entry.after.initialUnique }} 种 / 有效 {{ entry.after.initialEffective.toFixed(1) }}</span>
                 <span>F {{ entry.after.finalRows }} 行 / {{ entry.after.finalUnique }} 种 / 有效 {{ entry.after.finalEffective.toFixed(1) }}</span>
+                <span>T {{ entry.after.toneRows }} 行 / {{ entry.after.toneUnique }} 种 / 有效 {{ entry.after.toneEffective.toFixed(1) }}</span>
               </div>
               <div flex="~ wrap gap-x-3 gap-y-1" mt1>
                 <span>IF {{ entry.after.ifRows }} 行 / {{ entry.after.ifUnique }} 种 / 有效 {{ entry.after.ifEffective.toFixed(1) }}</span>
@@ -277,14 +278,28 @@ watchEffect(() => {
               <div flex="~ wrap gap-x-3 gap-y-1" mt1 op60>
                 <span>保留 I {{ (entry.initialRetained * 100).toFixed(1) }}%</span>
                 <span>F {{ (entry.finalRetained * 100).toFixed(1) }}%</span>
+                <span>T {{ (entry.toneRetained * 100).toFixed(1) }}%</span>
                 <span>IF {{ (entry.ifRetained * 100).toFixed(1) }}%</span>
                 <span>IF+PY {{ (entry.ifPyRetained * 100).toFixed(1) }}%</span>
                 <span>{{ entry.elapsedMs.toFixed(1) }} ms</span>
               </div>
               <div v-if="entry.v2 && entry.v3" mt1 flex="~ wrap gap-x-3 gap-y-1">
-                <span>V2 H={{ entry.v2.playerEI.toFixed(3) }} / {{ entry.v2.rating }} / {{ entry.v2.rank }}名</span>
-                <span>V3 H={{ entry.v3.playerEI.toFixed(3) }} / {{ entry.v3.rating }} / {{ entry.v3.rank }}名</span>
+                <span>V2 E={{ entry.v2.playerEI.toFixed(3) }}（E1={{ entry.v2.e1.toFixed(3) }}, E2={{ entry.v2.e2.toFixed(3) }}）/ {{ entry.v2.rating }} / {{ entry.v2.rank }}名</span>
+                <span>V3 E={{ entry.v3.playerEI.toFixed(3) }}（E1={{ entry.v3.e1.toFixed(3) }}, E2={{ entry.v3.e2.toFixed(3) }}）/ {{ entry.v3.rating }} / {{ entry.v3.rank }}名</span>
                 <span>排名差 {{ entry.v3.rank - entry.v2.rank >= 0 ? '+' : '' }}{{ entry.v3.rank - entry.v2.rank }}</span>
+              </div>
+              <div v-if="entry.analysis" mt1 flex="~ wrap gap-x-3 gap-y-1">
+                <span>本猜 E1={{ entry.analysis.e1.toFixed(3) }}</span>
+                <span>E2={{ entry.analysis.e2.toFixed(3) }}</span>
+                <span>E={{ entry.analysis.playerEI.toFixed(3) }}</span>
+                <span>I1={{ entry.analysis.i1?.toFixed(3) ?? '无结果' }}</span>
+                <span>I2={{ entry.analysis.i2?.toFixed(3) ?? '无结果' }}</span>
+                <span>I={{ entry.analysis.i1 != null && entry.analysis.i2 != null ? (entry.analysis.i1 + entry.analysis.i2).toFixed(3) : '无结果' }}</span>
+              </div>
+              <div v-if="entry.analysis" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
+                <span>累计 I1={{ entry.cumulativeI1.toFixed(3) }}</span>
+                <span>累计 I2={{ entry.cumulativeI2.toFixed(3) }}</span>
+                <span>累计 I={{ (entry.cumulativeI1 + entry.cumulativeI2).toFixed(3) }}</span>
               </div>
               <div v-if="entry.v3" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
                 <span>混合 λ={{ entry.v3.lambda.toFixed(4) }}（有效假设 {{ entry.v3.effectiveHypotheses.toFixed(1) }}）</span>
@@ -319,14 +334,15 @@ watchEffect(() => {
             评价调试
           </div>
           <div text-sm>
-            本次联合熵: {{ lastEvalDebug.playerEI.toFixed(3) }}
+            本次总期望信息 E: {{ lastEvalDebug.playerEI.toFixed(3) }}
+            （E1={{ lastEvalDebug.e1.toFixed(3) }}, E2={{ lastEvalDebug.e2.toFixed(3) }}）
             | 评价: {{ lastEvalDebug.rating }}
             | 超过: {{ lastEvalDebug.rank }} / {{ lastEvalDebug.total }}
             ({{ (lastEvalDebug.rank / lastEvalDebug.total * 100).toFixed(1) }}%)
           </div>
           <div text-xs op50>
-            后验: 声母 {{ lastEvalDebug.initialPosterior }} / 韵母 {{ lastEvalDebug.finalPosterior }}
-            | 粒子: 声母 {{ lastEvalDebug.initialParticles }} / 韵母 {{ lastEvalDebug.finalParticles }}
+            后验: 声母 {{ lastEvalDebug.initialPosterior }} / 韵母 {{ lastEvalDebug.finalPosterior }} / 声调 {{ lastEvalDebug.tonePosterior }}
+            | 粒子: 声母 {{ lastEvalDebug.initialParticles }} / 韵母 {{ lastEvalDebug.finalParticles }} / 声调 {{ lastEvalDebug.toneParticles }}
             | 耗时: {{ lastEvalDebug.elapsedMs.toFixed(1) }} ms
           </div>
           <div v-if="lastEvalDebug.sampled" mt-2 text-xs op50 max-h-100 overflow-auto w-full max-w-200>
@@ -334,6 +350,7 @@ watchEffect(() => {
               <span>{{ idx + 1 }}.</span>
               <span>{{ entry.word }}</span>
               <span op50>{{ entry.ei.toFixed(3) }}</span>
+              <span op50>(E1 {{ entry.e1.toFixed(3) }} + E2 {{ entry.e2.toFixed(3) }})</span>
               <span v-if="entry.ei < lastEvalDebug.playerEI" text-ok>◀</span>
             </div>
           </div>

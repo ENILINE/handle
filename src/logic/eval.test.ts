@@ -1,17 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID } from '../data/eval-data'
+import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, TONE_BITS } from '../data/eval-data'
 import {
+  analyzeV3,
+  combineActualInformation,
+  combineExpectedInformation,
   createEvalState,
   canAppendEvaluation,
   canReuseRatings,
   EVAL_VERSION,
   evalTesting,
   evaluate,
+  evaluateV2,
   feedbackCode,
   feedbackEntropy,
   getEvalDiagnosticSnapshot,
   pinyinFeedbackCode,
+  TONE_WEIGHT,
   updateState,
+  v3RealMixRatio,
 } from './eval'
 import { parseWord, testAnswer } from './utils'
 
@@ -24,6 +30,10 @@ function initials(...values: string[]): number {
 
 function finals(...values: string[]): number {
   return evalTesting.packTuple(values.map(value => finalId.get(value)!), FINAL_BITS)
+}
+
+function tones(...values: number[]): number {
+  return evalTesting.packTuple(values, TONE_BITS)
 }
 
 function applyGuess(state: ReturnType<typeof createEvalState>, guessWord: string, answerWord: string) {
@@ -73,6 +83,14 @@ describe('joint feedback encoding', () => {
 
     expect(pinyinFeedbackCode(guessInitial, guessFinal, targetInitial, targetFinal)).toBe(1)
   })
+
+  it('matches repeated tones with exact priority and excess duplicates gray', () => {
+    const guess = tones(1, 1, 2, 2)
+    const target = tones(1, 3, 2, 4)
+
+    expect(feedbackCode(guess, target, TONE_BITS))
+      .toBe(2 + 0 * 3 + 2 * 9 + 0 * 27)
+  })
 })
 
 describe('joint feedback entropy', () => {
@@ -108,7 +126,7 @@ describe('posterior filtering and ranking', () => {
     const state = createEvalState()
 
     expect(updateState(state, guess, testAnswer(guess, answer))).toBe(true)
-    expect(evalTesting.stateContains(state, answer)).toEqual({ initial: true, final: true })
+    expect(evalTesting.stateContains(state, answer)).toMatchObject({ initial: true, final: true, tone: true })
     expect(state.initialRows.length).toBeGreaterThan(0)
     expect(state.finalRows.length).toBeGreaterThan(0)
   })
@@ -119,7 +137,7 @@ describe('posterior filtering and ranking', () => {
     const guess = parseWord('搭搭撒撒', '抽抽搭搭')
 
     expect(updateState(state, guess, testAnswer(guess, answer))).toBe(true)
-    expect(evalTesting.stateContains(state, answer)).toEqual({ initial: true, final: true })
+    expect(evalTesting.stateContains(state, answer)).toMatchObject({ initial: true, final: true, tone: true })
   })
 
   it('produces a stable score and rank for the same state and guess', () => {
@@ -132,9 +150,25 @@ describe('posterior filtering and ranking', () => {
     expect(second).not.toBeNull()
     expect(second!.playerEI).toBe(first!.playerEI)
     expect(second!.rank).toBe(first!.rank)
+    expect(first!.playerEI).toBeCloseTo(first!.e1 + first!.e2, 12)
+    expect(first!.toneParticles).toBe(4096)
     expect(first!.initialParticles).toBe(4096)
     expect(first!.finalParticles).toBe(4096)
     expect(first!.elapsedMs).toBeLessThan(3000)
+  })
+
+  it('keeps expected tone information weighted but actual tone information unweighted', () => {
+    const state = createEvalState()
+    const answer = parseWord('东拼西凑')
+    const guess = parseWord('研经铸史', '东拼西凑')
+    const analysis = analyzeV3(state, guess, testAnswer(guess, answer))
+
+    expect(analysis).not.toBeNull()
+    expect(analysis!.playerEI).toBeCloseTo(analysis!.e1 + TONE_WEIGHT * analysis!.e2, 12)
+    expect(analysis!.i1).toBeTypeOf('number')
+    expect(analysis!.i2).toBeTypeOf('number')
+    expect(combineExpectedInformation(4, 2, 0.25)).toBe(4.5)
+    expect(combineActualInformation(4, 2)).toBe(6)
   })
 
   it('keeps common diverse openings above a heavily repeated opening', () => {
@@ -174,23 +208,25 @@ describe('posterior filtering and ranking', () => {
 })
 
 describe('joint posterior diagnostics', () => {
-  it('is opt-in and does not change the V2 score', () => {
-    const production = createEvalState()
+  it('keeps V2 available as a debug comparison while V3 requires joint state', () => {
+    const production = createEvalState({ diagnostics: false })
     const diagnostic = createEvalState({ diagnostics: true })
     const firstGuess = parseWord('研经铸史')
     const answer = parseWord('东拼西凑')
 
     expect(production.diagnostics).toBeUndefined()
     expect(diagnostic.diagnostics).toBeDefined()
-    expect(evaluate(diagnostic, firstGuess)!.playerEI).toBe(evaluate(production, firstGuess)!.playerEI)
-    expect(evaluate(diagnostic, firstGuess)!.rank).toBe(evaluate(production, firstGuess)!.rank)
+    expect(evaluate(production, firstGuess)).toBeNull()
+    expect(evaluateV2(diagnostic, firstGuess)!.playerEI).toBe(evaluateV2(production, firstGuess)!.playerEI)
+    expect(evaluateV2(diagnostic, firstGuess)!.rank).toBe(evaluateV2(production, firstGuess)!.rank)
     const feedback = testAnswer(firstGuess, answer)
     updateState(production, firstGuess, feedback)
     updateState(diagnostic, firstGuess, feedback)
     const secondGuess = parseWord('先来后到', '东拼西凑')
-    expect(evaluate(diagnostic, secondGuess)!.playerEI).toBe(evaluate(production, secondGuess)!.playerEI)
-    expect(evaluate(diagnostic, secondGuess)!.rank).toBe(evaluate(production, secondGuess)!.rank)
-    expect(EVAL_VERSION).toBe(2)
+    expect(evaluateV2(diagnostic, secondGuess)!.playerEI).toBe(evaluateV2(production, secondGuess)!.playerEI)
+    expect(evaluateV2(diagnostic, secondGuess)!.rank).toBe(evaluateV2(production, secondGuess)!.rank)
+    expect(EVAL_VERSION).toBe(3)
+    expect(TONE_WEIGHT).toBe(1)
   })
 
   it('retains the real answer in IF and IF+PY and keeps the sets nested', () => {
@@ -202,6 +238,7 @@ describe('joint posterior diagnostics', () => {
     expect(evalTesting.stateContains(state, answer)).toEqual({
       initial: true,
       final: true,
+      tone: true,
       if: true,
       ifPy: true,
     })
@@ -260,6 +297,48 @@ describe('pinyin tuple conventions', () => {
 
   it('packs final tuples within six bits per position', () => {
     expect(FINAL_BITS).toBe(6)
+    expect(TONE_BITS).toBe(3)
+  })
+})
+
+describe('V3 calibrated particles', () => {
+  it('only permits corpus-backed syllables, including v after l or n', () => {
+    let legal = 0
+    const vFinal = finalId.get('v')!
+    const vInitials: string[] = []
+    for (let initial = 0; initial < INITIALS.length; initial++) {
+      for (let final = 0; final < FINALS.length; final++) {
+        if (evalTesting.isLegalPinyin(initial, final))
+          legal++
+      }
+      if (evalTesting.isLegalPinyin(initial, vFinal))
+        vInitials.push(INITIALS[initial])
+    }
+
+    expect(legal).toBe(evalTesting.legalPinyinCount)
+    expect(vInitials).toEqual(['n', 'l'])
+  })
+
+  it('uses the continuous real/virtual mixing formula', () => {
+    for (const hypotheses of [1000, 100, 20, 10, 1])
+      expect(v3RealMixRatio(hypotheses)).toBeCloseTo(hypotheses / (hypotheses + 32), 12)
+  })
+
+  it('generates deterministic particles that satisfy all prior feedback', () => {
+    const state = createEvalState()
+    applyGuess(state, '研经铸史', '东拼西凑')
+    const first = evalTesting.createV3Particles(state)
+    const second = evalTesting.createV3Particles(state)
+
+    expect(first).not.toBeNull()
+    expect(second).not.toBeNull()
+    expect(first!.initials.length).toBe(4096)
+    expect(first!.finals.length).toBe(4096)
+    expect(first!.tones.length).toBeLessThanOrEqual(4096)
+    expect(evalTesting.particlesAreValid(state, first!)).toBe(true)
+    expect(Array.from(second!.initials)).toEqual(Array.from(first!.initials))
+    expect(Array.from(second!.finals)).toEqual(Array.from(first!.finals))
+    expect(Array.from(second!.tones)).toEqual(Array.from(first!.tones))
   })
 })
 

@@ -1,13 +1,13 @@
 import { breakpointsTailwind } from '@vueuse/core'
-import type { MatchType, ParsedChar, Rating } from './logic'
+import type { MatchType, ParsedChar } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
 import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
-import { EVAL_VERSION, canAppendEvaluation, canReuseRatings, createEvalState, evaluate, evaluateV3Shadow, getEvalDiagnosticSnapshot, updateState } from './logic/eval'
-import type { EvalDiagnosticSnapshot, EvalResult, EvalState, V3ShadowResult } from './logic/eval'
+import { EVAL_VERSION, analyzeV3, canAppendEvaluation, canReuseRatings, createEvalState, evaluate, evaluateV2, getEvalDiagnosticSnapshot, updateState } from './logic/eval'
+import type { EvalAnalysis, EvalDiagnosticSnapshot, EvalResult, EvalState, V2EvalResult } from './logic/eval'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -214,19 +214,18 @@ export interface EvalDebugTraceEntry {
   after: EvalDiagnosticSnapshot
   initialRetained: number
   finalRetained: number
+  toneRetained: number
   ifRetained: number
   ifPyRetained: number
   elapsedMs: number
-  v2?: {
-    playerEI: number
-    rating: Rating
-    rank: number
-    total: number
-  }
-  v3?: V3ShadowResult
+  analysis?: EvalAnalysis
+  v2?: V2EvalResult
+  v3?: EvalResult
+  cumulativeI1: number
+  cumulativeI2: number
 }
 
-export const evalState = ref<EvalState>(createEvalState({ diagnostics: isDev }))
+export const evalState = ref<EvalState>(createEvalState({ diagnostics: true }))
 export const triesRatings = computed(() => meta.value.ratings || [])
 export const lastEvalDebug = ref<EvalResult | null>(null)
 export const evalDebugTrace = ref<EvalDebugTraceEntry[]>([])
@@ -241,30 +240,37 @@ const evalGameKey = computed(() => {
 
 let evaluatedGameKey = ''
 let evaluatedWords: string[] = []
+let cumulativeEvalI1 = 0
+let cumulativeEvalI2 = 0
 
 function evaluateAndApply(
   state: EvalState,
   word: string,
   shouldEvaluate: boolean,
   includeDebug: boolean,
-  shouldEvaluateShadow = false,
+  shouldEvaluateV2 = false,
+  shouldAnalyze = isDev,
 ): EvalResult | null {
   try {
     const startedAt = performance.now()
-    const diagnosticsBefore = getEvalDiagnosticSnapshot(state)
+    const diagnosticsBefore = isDev ? getEvalDiagnosticSnapshot(state) : null
     const parsed = parseWord(word)
     const feedback = testAnswer(parsed)
-    const result = shouldEvaluate ? evaluate(state, parsed, includeDebug) : null
-    const v3 = shouldEvaluateShadow ? evaluateV3Shadow(state, parsed) : null
-    const scoringElapsedMs = performance.now() - startedAt
+    const result = shouldEvaluate ? evaluate(state, parsed, includeDebug, feedback) : null
+    const analysis = result || (shouldAnalyze ? analyzeV3(state, parsed, feedback) : null)
+    const v2 = shouldEvaluateV2 ? evaluateV2(state, parsed, false, feedback) : null
     const valid = updateState(state, parsed, feedback)
-    const diagnosticsAfter = getEvalDiagnosticSnapshot(state)
+    const diagnosticsAfter = isDev ? getEvalDiagnosticSnapshot(state) : null
     const elapsedMs = performance.now() - startedAt
     if (result) {
       result.initialPosterior = state.initialRows.length
       result.finalPosterior = state.finalRows.length
-      result.elapsedMs = scoringElapsedMs
+      result.tonePosterior = state.toneRows.length
     }
+    if (analysis?.i1 != null)
+      cumulativeEvalI1 += analysis.i1
+    if (analysis?.i2 != null)
+      cumulativeEvalI2 += analysis.i2
     if (diagnosticsBefore && diagnosticsAfter) {
       const retained = (after: number, before: number) => before ? after / before : 0
       evalDebugTrace.value.push({
@@ -274,18 +280,15 @@ function evaluateAndApply(
         after: diagnosticsAfter,
         initialRetained: retained(diagnosticsAfter.initialRows, diagnosticsBefore.initialRows),
         finalRetained: retained(diagnosticsAfter.finalRows, diagnosticsBefore.finalRows),
+        toneRetained: retained(diagnosticsAfter.toneRows, diagnosticsBefore.toneRows),
         ifRetained: retained(diagnosticsAfter.ifRows, diagnosticsBefore.ifRows),
         ifPyRetained: retained(diagnosticsAfter.ifPyRows, diagnosticsBefore.ifPyRows),
         elapsedMs,
-        v2: result
-          ? {
-              playerEI: result.playerEI,
-              rating: result.rating,
-              rank: result.rank,
-              total: result.total,
-            }
-          : undefined,
-        v3: v3 || undefined,
+        analysis: analysis || undefined,
+        v2: v2 || undefined,
+        v3: result || undefined,
+        cumulativeI1: cumulativeEvalI1,
+        cumulativeI2: cumulativeEvalI2,
       })
     }
     if (!valid && isDev)
@@ -303,7 +306,7 @@ function evaluateAndApply(
 }
 
 function rebuildEvaluation(words: readonly string[]): void {
-  const state = createEvalState({ diagnostics: isDev })
+  const state = createEvalState({ diagnostics: true })
   const storedRatingsAreCurrent = canReuseRatings(
     meta.value.ratingsVersion,
     meta.value.ratings?.length,
@@ -315,6 +318,8 @@ function rebuildEvaluation(words: readonly string[]): void {
 
   lastEvalDebug.value = null
   evalDebugTrace.value = []
+  cumulativeEvalI1 = 0
+  cumulativeEvalI2 = 0
   for (let index = 0; index < words.length; index++) {
     const shouldEvaluate = !storedRatingsAreCurrent || (isDev && index === words.length - 1)
     const result = evaluateAndApply(
@@ -323,6 +328,7 @@ function rebuildEvaluation(words: readonly string[]): void {
       shouldEvaluate,
       isDev && index === words.length - 1,
       isDev && index === words.length - 1,
+      isDev,
     )
     if (!storedRatingsAreCurrent)
       ratings[index] = result?.rating ?? null
@@ -343,7 +349,7 @@ function appendEvaluations(words: readonly string[]): void {
     : []
 
   for (let index = evaluatedWords.length; index < words.length; index++) {
-    const result = evaluateAndApply(evalState.value, words[index], true, isDev, isDev)
+    const result = evaluateAndApply(evalState.value, words[index], true, isDev, isDev, isDev)
     ratings[index] = result?.rating ?? null
     if (isDev)
       lastEvalDebug.value = result

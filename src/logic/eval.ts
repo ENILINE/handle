@@ -20,20 +20,32 @@ import {
   SAMPLED_WORDS,
   SAMPLE_SEED,
   SAMPLE_SIZE,
+  SAMPLED_TONES_BASE64,
   SIGNATURE_WEIGHT_MAX,
   SIGNATURE_WEIGHT_MIN,
   SLOT_COUNT,
   STRUCTURE_SIGNATURE_KEYS,
   STRUCTURE_SIGNATURE_WEIGHTS,
   SYLLABLE_COUNTS_BASE64,
+  TONE_BITS,
+  TONE_TUPLES_BASE64,
 } from '../data/eval-data'
 
-export const EVAL_VERSION = 2
+export const EVAL_VERSION = 3
+export const TONE_WEIGHT = 1
 export const MAX_POSTERIOR_SAMPLES = 4096
 export const DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT = 8
 export const V3_PARTICLE_COUNT = 4096
 export const V3_VIRTUAL_POOL_LIMIT = 16384
 export const V3_ATTEMPT_LIMIT = 262144
+
+export function combineExpectedInformation(e1: number, e2: number, toneWeight = TONE_WEIGHT): number {
+  return e1 + toneWeight * e2
+}
+
+export function combineActualInformation(i1: number, i2: number): number {
+  return i1 + i2
+}
 
 export function canReuseRatings(
   ratingsVersion: number | undefined,
@@ -66,6 +78,8 @@ let initialTuplesCache: Uint32Array | undefined
 let finalTuplesCache: Uint32Array | undefined
 let sampledInitialsCache: Uint32Array | undefined
 let sampledFinalsCache: Uint32Array | undefined
+let toneTuplesCache: Uint32Array | undefined
+let sampledTonesCache: Uint32Array | undefined
 let syllableCountsCache: Uint32Array | undefined
 let initialSlotCountsCache: Uint32Array | undefined
 let finalSlotCountsCache: Uint32Array | undefined
@@ -99,6 +113,14 @@ function getSampledInitials(): Uint32Array {
 
 function getSampledFinals(): Uint32Array {
   return sampledFinalsCache ||= decodeUint32(SAMPLED_FINALS_BASE64)
+}
+
+function getToneTuples(): Uint32Array {
+  return toneTuplesCache ||= decodeUint32(TONE_TUPLES_BASE64)
+}
+
+function getSampledTones(): Uint32Array {
+  return sampledTonesCache ||= decodeUint32(SAMPLED_TONES_BASE64)
 }
 
 function getSyllableCounts(): Uint32Array {
@@ -136,9 +158,10 @@ function packTuple(values: readonly number[], bits: number): number {
   return packed >>> 0
 }
 
-function parsePinyins(pinyins: readonly string[]): { initial: number; final: number } {
+function parsePinyins(pinyins: readonly string[]): { initial: number; final: number; tone: number } {
   const initials: number[] = []
   const finals: number[] = []
+  const tones: number[] = []
   for (let position = 0; position < WORD_LENGTH; position++) {
     const [initial, final] = splitPinyin(pinyins[position] || '')
     const initialId = initialIndex.get(initial)
@@ -147,10 +170,12 @@ function parsePinyins(pinyins: readonly string[]): { initial: number; final: num
       throw new Error(`Unsupported pinyin element: ${initial || 'null'} + ${final}`)
     initials.push(initialId)
     finals.push(finalId)
+    tones.push(+(pinyins[position]?.match(/[\d]$/)?.[0] || 0))
   }
   return {
     initial: packTuple(initials, INITIAL_BITS),
     final: packTuple(finals, FINAL_BITS),
+    tone: packTuple(tones, TONE_BITS),
   }
 }
 
@@ -158,7 +183,7 @@ function parseWordTuples(word: string): { initial: number; final: number } {
   return parsePinyins(getPinyin(word))
 }
 
-function parseParsedTuples(parsed: readonly ParsedChar[]): { initial: number; final: number } {
+function parseParsedTuples(parsed: readonly ParsedChar[]): { initial: number; final: number; tone: number } {
   return parsePinyins(parsed.map(char => `${char.yin}${char.tone || ''}`))
 }
 
@@ -281,7 +306,7 @@ function matchValue(value: string): number {
 function observedCode(
   parsed: readonly ParsedChar[],
   results: readonly MatchResult[],
-  dimension: 'initial' | 'final' | 'pinyin',
+  dimension: 'initial' | 'final' | 'pinyin' | 'tone',
 ): number {
   let code = 0
   let factor = 1
@@ -291,7 +316,9 @@ function observedCode(
       ? results[position]._1
       : dimension === 'final'
         ? results[position]._2
-        : results[position].py
+        : dimension === 'pinyin'
+          ? results[position].py
+          : results[position].tone
     code += (skipped ? NONE : matchValue(result)) * factor
     factor *= 3
   }
@@ -305,8 +332,10 @@ function allRows(): Uint32Array {
 export interface EvalState {
   initialRows: Uint32Array
   finalRows: Uint32Array
+  toneRows: Uint32Array
   initialHistoryHash: number
   finalHistoryHash: number
+  toneHistoryHash: number
   valid: boolean
   diagnostics?: EvalDiagnosticsState
 }
@@ -332,10 +361,12 @@ export function createEvalState(options: EvalStateOptions = {}): EvalState {
   return {
     initialRows: allRows(),
     finalRows: allRows(),
+    toneRows: allRows(),
     initialHistoryHash: SAMPLE_SEED,
     finalHistoryHash: SAMPLE_SEED,
+    toneHistoryHash: SAMPLE_SEED,
     valid: true,
-    diagnostics: options.diagnostics
+    diagnostics: options.diagnostics !== false
       ? {
           ifRows: allRows(),
           ifPyRows: allRows(),
@@ -351,14 +382,17 @@ export type EvalDegradation = 'none' | 'true-saturation' | 'corpus-sparse' | 'in
 export interface EvalDiagnosticSnapshot {
   initialRows: number
   finalRows: number
+  toneRows: number
   ifRows: number
   ifPyRows: number
   initialUnique: number
   finalUnique: number
+  toneUnique: number
   ifUnique: number
   ifPyUnique: number
   initialEffective: number
   finalEffective: number
+  toneEffective: number
   ifEffective: number
   ifPyEffective: number
   degradation: EvalDegradation
@@ -406,6 +440,8 @@ export function getEvalDiagnosticSnapshot(state: EvalState): EvalDiagnosticSnaps
   const finalTuples = getFinalTuples()
   const initial = hypothesisStats(state.initialRows, row => initialTuples[row])
   const final = hypothesisStats(state.finalRows, row => finalTuples[row])
+  const toneTuples = getToneTuples()
+  const tone = hypothesisStats(state.toneRows, row => toneTuples[row])
   const combinedKey = (row: number) => pinyinTupleKey(initialTuples[row], finalTuples[row])
   const joint = hypothesisStats(diagnostics.ifRows, combinedKey)
   const jointPy = hypothesisStats(diagnostics.ifPyRows, combinedKey)
@@ -422,14 +458,17 @@ export function getEvalDiagnosticSnapshot(state: EvalState): EvalDiagnosticSnaps
   return {
     initialRows: state.initialRows.length,
     finalRows: state.finalRows.length,
+    toneRows: state.toneRows.length,
     ifRows: diagnostics.ifRows.length,
     ifPyRows: diagnostics.ifPyRows.length,
     initialUnique: initial.unique,
     finalUnique: final.unique,
+    toneUnique: tone.unique,
     ifUnique: joint.unique,
     ifPyUnique: jointPy.unique,
     initialEffective: initial.effective,
     finalEffective: final.effective,
+    toneEffective: tone.effective,
     ifEffective: joint.effective,
     ifPyEffective: jointPy.effective,
     degradation,
@@ -477,8 +516,23 @@ export function feedbackEntropy(
   bits: number,
   skippedValue = -1,
 ): number {
+  return feedbackStatistics(guess, targets, bits, skippedValue).entropy
+}
+
+interface FeedbackStatistics {
+  entropy: number
+  information?: number
+}
+
+function feedbackStatistics(
+  guess: number,
+  targets: Uint32Array,
+  bits: number,
+  skippedValue = -1,
+  observed?: number,
+): FeedbackStatistics {
   if (!targets.length)
-    return Number.NaN
+    return { entropy: Number.NaN }
 
   const counts = new Uint32Array(FEEDBACK_BUCKETS)
   for (const target of targets)
@@ -490,7 +544,13 @@ export function feedbackEntropy(
     const probability = count / targets.length
     entropy -= probability * Math.log2(probability)
   }
-  return entropy
+  const observedCount = observed == null ? undefined : counts[observed]
+  return {
+    entropy,
+    information: observedCount == null || !observedCount
+      ? undefined
+      : -Math.log2(observedCount / targets.length),
+  }
 }
 
 interface EvalParticles {
@@ -498,16 +558,21 @@ interface EvalParticles {
   finals: Uint32Array
 }
 
-function createParticles(state: EvalState): EvalParticles | null {
-  if (!state.valid || !state.initialRows.length || !state.finalRows.length)
+interface V2Particles extends EvalParticles {
+  tones: Uint32Array
+}
+
+function createParticles(state: EvalState): V2Particles | null {
+  if (!state.valid || !state.initialRows.length || !state.finalRows.length || !state.toneRows.length)
     return null
   return {
     initials: sampleTuples(state.initialRows, getInitialTuples(), state.initialHistoryHash ^ 0x49A7E1),
     finals: sampleTuples(state.finalRows, getFinalTuples(), state.finalHistoryHash ^ 0xF17A1),
+    tones: sampleTuples(state.toneRows, getToneTuples(), state.toneHistoryHash ^ 0x70AE1),
   }
 }
 
-function tupleScore(initial: number, final: number, particles: EvalParticles): number {
+function v2BaseScore(initial: number, final: number, particles: EvalParticles): number {
   return feedbackEntropy(initial, particles.initials, INITIAL_BITS, NULL_INITIAL_ID)
     + feedbackEntropy(final, particles.finals, FINAL_BITS)
 }
@@ -523,55 +588,103 @@ function ratingFromPercentile(percentile: number): Rating {
 export interface EvalDebugEntry {
   word: string
   ei: number
+  e1: number
+  e2: number
 }
 
-export interface EvalResult {
+export interface EvalBreakdown {
+  e1: number
+  e2: number
+  i1?: number
+  i2?: number
+}
+
+export interface V2EvalResult extends EvalBreakdown {
   playerEI: number
   rating: Rating
   rank: number
   total: number
   initialPosterior: number
   finalPosterior: number
+  tonePosterior: number
   initialParticles: number
   finalParticles: number
+  toneParticles: number
   elapsedMs: number
   sampled?: EvalDebugEntry[]
 }
 
-export function evaluate(
+export function evaluateV2(
   state: EvalState,
   parsedGuess: readonly ParsedChar[],
   includeDebug = false,
-): EvalResult | null {
+  results?: readonly MatchResult[],
+): V2EvalResult | null {
   const startedAt = performance.now()
   const particles = createParticles(state)
   if (!particles)
     return null
 
   const guess = parseParsedTuples(parsedGuess)
-  const playerEI = tupleScore(guess.initial, guess.final, particles)
+  const initial = feedbackStatistics(
+    guess.initial,
+    particles.initials,
+    INITIAL_BITS,
+    NULL_INITIAL_ID,
+    results ? observedCode(parsedGuess, results, 'initial') : undefined,
+  )
+  const final = feedbackStatistics(
+    guess.final,
+    particles.finals,
+    FINAL_BITS,
+    -1,
+    results ? observedCode(parsedGuess, results, 'final') : undefined,
+  )
+  const tone = feedbackStatistics(
+    guess.tone,
+    particles.tones,
+    TONE_BITS,
+    -1,
+    results ? observedCode(parsedGuess, results, 'tone') : undefined,
+  )
+  const e1 = initial.entropy + final.entropy
+  const e2 = tone.entropy
+  const playerEI = combineExpectedInformation(e1, e2)
+  const i1 = initial.information == null || final.information == null
+    ? undefined
+    : initial.information + final.information
+  const i2 = tone.information
   const sampledInitials = getSampledInitials()
   const sampledFinals = getSampledFinals()
+  const sampledTones = getSampledTones()
   const entries: EvalDebugEntry[] | undefined = includeDebug ? [] : undefined
   let lowerCount = 0
 
   for (let index = 0; index < SAMPLE_SIZE; index++) {
-    const ei = tupleScore(sampledInitials[index], sampledFinals[index], particles)
+    const benchmarkE1 = v2BaseScore(sampledInitials[index], sampledFinals[index], particles)
+    const benchmarkE2 = feedbackEntropy(sampledTones[index], particles.tones, TONE_BITS)
+    const ei = combineExpectedInformation(benchmarkE1, benchmarkE2)
     if (ei < playerEI)
       lowerCount++
-    entries?.push({ word: SAMPLED_WORDS[index], ei })
+    entries?.push({ word: SAMPLED_WORDS[index], ei, e1: benchmarkE1, e2: benchmarkE2 })
   }
   entries?.sort((left, right) => right.ei - left.ei)
 
   return {
     playerEI,
+    e1,
+    e2,
+    i1,
+    i2,
     rating: ratingFromPercentile(lowerCount / SAMPLE_SIZE),
     rank: lowerCount,
     total: SAMPLE_SIZE,
     initialPosterior: state.initialRows.length,
     finalPosterior: state.finalRows.length,
+    tonePosterior: state.toneRows.length,
     initialParticles: particles.initials.length,
     finalParticles: particles.finals.length,
+    toneParticles: particles.tones.length,
     elapsedMs: performance.now() - startedAt,
     sampled: entries,
   }
@@ -718,6 +831,7 @@ function resampledEffectiveSize(initials: Uint32Array, finals: Uint32Array): num
 }
 
 interface V3Particles extends EvalParticles {
+  tones: Uint32Array
   effectiveHypotheses: number
   lambda: number
   realCount: number
@@ -733,11 +847,17 @@ interface V3Particles extends EvalParticles {
   generationMs: number
 }
 
-export interface V3ShadowResult {
+export interface EvalResult extends EvalBreakdown {
   playerEI: number
   rating: Rating
   rank: number
   total: number
+  initialPosterior: number
+  finalPosterior: number
+  tonePosterior: number
+  initialParticles: number
+  finalParticles: number
+  toneParticles: number
   effectiveHypotheses: number
   lambda: number
   realParticles: number
@@ -754,12 +874,13 @@ export interface V3ShadowResult {
   generationMs: number
   rankingMs: number
   elapsedMs: number
+  sampled?: EvalDebugEntry[]
 }
 
 function createV3Particles(state: EvalState): V3Particles | null {
   const startedAt = performance.now()
   const diagnostics = state.diagnostics
-  if (!diagnostics || !state.valid || !state.initialRows.length || !state.finalRows.length)
+  if (!diagnostics || !state.valid || !state.initialRows.length || !state.finalRows.length || !state.toneRows.length)
     return null
 
   const combinedKey = (row: number) =>
@@ -884,6 +1005,11 @@ function createV3Particles(state: EvalState): V3Particles | null {
   return {
     initials,
     finals,
+    tones: sampleTuples(
+      state.toneRows,
+      getToneTuples(),
+      state.toneHistoryHash ^ historySeed ^ 0x70AE3,
+    ),
     effectiveHypotheses,
     lambda,
     realCount,
@@ -908,8 +1034,17 @@ function jointFeedbackEntropy(
   guessFinal: number,
   particles: EvalParticles,
 ): number {
+  return jointFeedbackStatistics(guessInitial, guessFinal, particles).entropy
+}
+
+function jointFeedbackStatistics(
+  guessInitial: number,
+  guessFinal: number,
+  particles: EvalParticles,
+  observed?: number,
+): FeedbackStatistics {
   if (!particles.initials.length)
-    return Number.NaN
+    return { entropy: Number.NaN }
 
   let touchedCount = 0
   for (let index = 0; index < particles.initials.length; index++) {
@@ -938,47 +1073,141 @@ function jointFeedbackEntropy(
   }
 
   let entropy = 0
+  let observedCount: number | undefined
   for (let index = 0; index < touchedCount; index++) {
     const code = touchedJointFeedback[index]
-    const probability = jointFeedbackCounts[code] / particles.initials.length
+    const count = jointFeedbackCounts[code]
+    const probability = count / particles.initials.length
     entropy -= probability * Math.log2(probability)
+    if (code === observed)
+      observedCount = count
     jointFeedbackCounts[code] = 0
   }
-  return entropy
+  return {
+    entropy,
+    information: observed == null || !observedCount
+      ? undefined
+      : -Math.log2(observedCount / particles.initials.length),
+  }
 }
 
-/** Development-only V3 shadow score. It never mutates the V2 state or ratings. */
-export function evaluateV3Shadow(
+export interface EvalAnalysis extends EvalBreakdown {
+  playerEI: number
+}
+
+interface V3PlayerAnalysis extends EvalAnalysis {
+  particles: V3Particles
+}
+
+function analyzeV3Internal(
   state: EvalState,
   parsedGuess: readonly ParsedChar[],
-): V3ShadowResult | null {
-  const startedAt = performance.now()
+  results?: readonly MatchResult[],
+): V3PlayerAnalysis | null {
   const particles = createV3Particles(state)
   if (!particles)
     return null
+  const guess = parseParsedTuples(parsedGuess)
+  const observedJointCode = results
+    ? observedCode(parsedGuess, results, 'initial')
+      + observedCode(parsedGuess, results, 'final') * FEEDBACK_BUCKETS
+      + observedCode(parsedGuess, results, 'pinyin') * FEEDBACK_BUCKETS * FEEDBACK_BUCKETS
+    : undefined
+  const base = jointFeedbackStatistics(
+    guess.initial,
+    guess.final,
+    particles,
+    observedJointCode,
+  )
+  const tone = feedbackStatistics(
+    guess.tone,
+    particles.tones,
+    TONE_BITS,
+    -1,
+    results ? observedCode(parsedGuess, results, 'tone') : undefined,
+  )
+  return {
+    particles,
+    e1: base.entropy,
+    e2: tone.entropy,
+    i1: base.information,
+    i2: tone.information,
+    playerEI: combineExpectedInformation(base.entropy, tone.entropy),
+  }
+}
+
+/** Score one observed guess without ranking it against the 1000 benchmark words. */
+export function analyzeV3(
+  state: EvalState,
+  parsedGuess: readonly ParsedChar[],
+  results: readonly MatchResult[],
+): EvalAnalysis | null {
+  const analysis = analyzeV3Internal(state, parsedGuess, results)
+  if (!analysis)
+    return null
+  return {
+    playerEI: analysis.playerEI,
+    e1: analysis.e1,
+    e2: analysis.e2,
+    i1: analysis.i1,
+    i2: analysis.i2,
+  }
+}
+
+/** Official V3 score: calibrated initial/final/pinyin particles plus independent tone entropy. */
+export function evaluate(
+  state: EvalState,
+  parsedGuess: readonly ParsedChar[],
+  includeDebug = false,
+  results?: readonly MatchResult[],
+): EvalResult | null {
+  const startedAt = performance.now()
+  const analysis = analyzeV3Internal(state, parsedGuess, results)
+  if (!analysis)
+    return null
+  const { particles, e1, e2, i1, i2, playerEI } = analysis
 
   const rankingStartedAt = performance.now()
-  const guess = parseParsedTuples(parsedGuess)
-  const playerEI = jointFeedbackEntropy(guess.initial, guess.final, particles)
   const sampledInitials = getSampledInitials()
   const sampledFinals = getSampledFinals()
+  const sampledTones = getSampledTones()
+  const entries: EvalDebugEntry[] | undefined = includeDebug ? [] : undefined
   let lowerCount = 0
   for (let index = 0; index < SAMPLE_SIZE; index++) {
-    const entropy = jointFeedbackEntropy(
+    const benchmarkE1 = jointFeedbackEntropy(
       sampledInitials[index],
       sampledFinals[index],
       particles,
     )
+    const benchmarkE2 = feedbackEntropy(sampledTones[index], particles.tones, TONE_BITS)
+    const entropy = combineExpectedInformation(benchmarkE1, benchmarkE2)
     if (entropy < playerEI)
       lowerCount++
+    entries?.push({
+      word: SAMPLED_WORDS[index],
+      ei: entropy,
+      e1: benchmarkE1,
+      e2: benchmarkE2,
+    })
   }
+  entries?.sort((left, right) => right.ei - left.ei)
   const rankingMs = performance.now() - rankingStartedAt
 
   return {
     playerEI,
+    e1,
+    e2,
+    i1,
+    i2,
     rating: ratingFromPercentile(lowerCount / SAMPLE_SIZE),
     rank: lowerCount,
     total: SAMPLE_SIZE,
+    initialPosterior: state.initialRows.length,
+    finalPosterior: state.finalRows.length,
+    tonePosterior: state.toneRows.length,
+    initialParticles: particles.initials.length,
+    finalParticles: particles.finals.length,
+    toneParticles: particles.tones.length,
     effectiveHypotheses: particles.effectiveHypotheses,
     lambda: particles.lambda,
     realParticles: particles.realCount,
@@ -995,6 +1224,7 @@ export function evaluateV3Shadow(
     generationMs: particles.generationMs,
     rankingMs,
     elapsedMs: performance.now() - startedAt,
+    sampled: entries,
   }
 }
 
@@ -1061,6 +1291,7 @@ export function updateState(
   const guess = parseParsedTuples(parsedGuess)
   const initialCode = observedCode(parsedGuess, results, 'initial')
   const finalCode = observedCode(parsedGuess, results, 'final')
+  const toneCode = observedCode(parsedGuess, results, 'tone')
   const pinyinCode = state.diagnostics
     ? observedCode(parsedGuess, results, 'pinyin')
     : undefined
@@ -1079,6 +1310,13 @@ export function updateState(
     guess.final,
     finalCode,
     FINAL_BITS,
+  )
+  state.toneRows = filterRows(
+    state.toneRows,
+    getToneTuples(),
+    guess.tone,
+    toneCode,
+    TONE_BITS,
   )
   if (state.diagnostics) {
     state.diagnostics.ifRows = filterJointRows(
@@ -1114,7 +1352,10 @@ export function updateState(
   }
   state.initialHistoryHash = hashStep(state.initialHistoryHash, initialCode)
   state.finalHistoryHash = hashStep(state.finalHistoryHash, finalCode)
-  state.valid = state.initialRows.length > 0 && state.finalRows.length > 0
+  state.toneHistoryHash = hashStep(state.toneHistoryHash, toneCode)
+  state.valid = state.initialRows.length > 0
+    && state.finalRows.length > 0
+    && state.toneRows.length > 0
   return state.valid
 }
 
@@ -1168,11 +1409,13 @@ export const evalTesting = {
     const result: {
       initial: boolean
       final: boolean
+      tone: boolean
       if?: boolean
       ifPy?: boolean
     } = {
       initial: Array.from(state.initialRows).some(row => getInitialTuples()[row] === tuple.initial),
       final: Array.from(state.finalRows).some(row => getFinalTuples()[row] === tuple.final),
+      tone: Array.from(state.toneRows).some(row => getToneTuples()[row] === tuple.tone),
     }
     if (state.diagnostics) {
       result.if = Array.from(state.diagnostics.ifRows).some(row =>
