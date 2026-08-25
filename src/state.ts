@@ -1,13 +1,13 @@
 import { breakpointsTailwind } from '@vueuse/core'
-import type { MatchType, ParsedChar } from './logic'
+import type { MatchType, ParsedChar, Rating } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
 import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
-import { EVAL_VERSION, canAppendEvaluation, canReuseRatings, createEvalState, evaluate, getEvalDiagnosticSnapshot, updateState } from './logic/eval'
-import type { EvalDiagnosticSnapshot, EvalResult, EvalState } from './logic/eval'
+import { EVAL_VERSION, canAppendEvaluation, canReuseRatings, createEvalState, evaluate, evaluateV3Shadow, getEvalDiagnosticSnapshot, updateState } from './logic/eval'
+import type { EvalDiagnosticSnapshot, EvalResult, EvalState, V3ShadowResult } from './logic/eval'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -217,6 +217,13 @@ export interface EvalDebugTraceEntry {
   ifRetained: number
   ifPyRetained: number
   elapsedMs: number
+  v2?: {
+    playerEI: number
+    rating: Rating
+    rank: number
+    total: number
+  }
+  v3?: V3ShadowResult
 }
 
 export const evalState = ref<EvalState>(createEvalState({ diagnostics: isDev }))
@@ -240,6 +247,7 @@ function evaluateAndApply(
   word: string,
   shouldEvaluate: boolean,
   includeDebug: boolean,
+  shouldEvaluateShadow = false,
 ): EvalResult | null {
   try {
     const startedAt = performance.now()
@@ -247,13 +255,15 @@ function evaluateAndApply(
     const parsed = parseWord(word)
     const feedback = testAnswer(parsed)
     const result = shouldEvaluate ? evaluate(state, parsed, includeDebug) : null
+    const v3 = shouldEvaluateShadow ? evaluateV3Shadow(state, parsed) : null
+    const scoringElapsedMs = performance.now() - startedAt
     const valid = updateState(state, parsed, feedback)
     const diagnosticsAfter = getEvalDiagnosticSnapshot(state)
     const elapsedMs = performance.now() - startedAt
     if (result) {
       result.initialPosterior = state.initialRows.length
       result.finalPosterior = state.finalRows.length
-      result.elapsedMs = elapsedMs
+      result.elapsedMs = scoringElapsedMs
     }
     if (diagnosticsBefore && diagnosticsAfter) {
       const retained = (after: number, before: number) => before ? after / before : 0
@@ -267,6 +277,15 @@ function evaluateAndApply(
         ifRetained: retained(diagnosticsAfter.ifRows, diagnosticsBefore.ifRows),
         ifPyRetained: retained(diagnosticsAfter.ifPyRows, diagnosticsBefore.ifPyRows),
         elapsedMs,
+        v2: result
+          ? {
+              playerEI: result.playerEI,
+              rating: result.rating,
+              rank: result.rank,
+              total: result.total,
+            }
+          : undefined,
+        v3: v3 || undefined,
       })
     }
     if (!valid && isDev)
@@ -303,6 +322,7 @@ function rebuildEvaluation(words: readonly string[]): void {
       words[index],
       shouldEvaluate,
       isDev && index === words.length - 1,
+      isDev && index === words.length - 1,
     )
     if (!storedRatingsAreCurrent)
       ratings[index] = result?.rating ?? null
@@ -323,7 +343,7 @@ function appendEvaluations(words: readonly string[]): void {
     : []
 
   for (let index = evaluatedWords.length; index < words.length; index++) {
-    const result = evaluateAndApply(evalState.value, words[index], true, isDev)
+    const result = evaluateAndApply(evalState.value, words[index], true, isDev, isDev)
     ratings[index] = result?.rating ?? null
     if (isDev)
       lastEvalDebug.value = result

@@ -2,24 +2,38 @@ import type { MatchResult, ParsedChar, Rating } from './types'
 import { getPinyin } from './idioms'
 import { WORD_LENGTH } from './constants'
 import {
+  CALIBRATION_SEED,
   EVAL_ROW_COUNT,
   FINAL_BITS,
+  FINAL_SLOT_COUNTS_BASE64,
   FINALS,
   FINAL_TUPLES_BASE64,
   INITIAL_BITS,
+  INITIAL_SLOT_COUNTS_BASE64,
   INITIALS,
   INITIAL_TUPLES_BASE64,
+  LEGAL_PINYIN_COUNT,
   NULL_INITIAL_ID,
+  PINYIN_ID_COUNT,
   SAMPLED_FINALS_BASE64,
   SAMPLED_INITIALS_BASE64,
   SAMPLED_WORDS,
   SAMPLE_SEED,
   SAMPLE_SIZE,
+  SIGNATURE_WEIGHT_MAX,
+  SIGNATURE_WEIGHT_MIN,
+  SLOT_COUNT,
+  STRUCTURE_SIGNATURE_KEYS,
+  STRUCTURE_SIGNATURE_WEIGHTS,
+  SYLLABLE_COUNTS_BASE64,
 } from '../data/eval-data'
 
 export const EVAL_VERSION = 2
 export const MAX_POSTERIOR_SAMPLES = 4096
 export const DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT = 8
+export const V3_PARTICLE_COUNT = 4096
+export const V3_VIRTUAL_POOL_LIMIT = 16384
+export const V3_ATTEMPT_LIMIT = 262144
 
 export function canReuseRatings(
   ratingsVersion: number | undefined,
@@ -52,6 +66,9 @@ let initialTuplesCache: Uint32Array | undefined
 let finalTuplesCache: Uint32Array | undefined
 let sampledInitialsCache: Uint32Array | undefined
 let sampledFinalsCache: Uint32Array | undefined
+let syllableCountsCache: Uint32Array | undefined
+let initialSlotCountsCache: Uint32Array | undefined
+let finalSlotCountsCache: Uint32Array | undefined
 
 function decodeUint32(base64: string): Uint32Array {
   const binary = atob(base64)
@@ -82,6 +99,18 @@ function getSampledInitials(): Uint32Array {
 
 function getSampledFinals(): Uint32Array {
   return sampledFinalsCache ||= decodeUint32(SAMPLED_FINALS_BASE64)
+}
+
+function getSyllableCounts(): Uint32Array {
+  return syllableCountsCache ||= decodeUint32(SYLLABLE_COUNTS_BASE64)
+}
+
+function getInitialSlotCounts(): Uint32Array {
+  return initialSlotCountsCache ||= decodeUint32(INITIAL_SLOT_COUNTS_BASE64)
+}
+
+function getFinalSlotCounts(): Uint32Array {
+  return finalSlotCountsCache ||= decodeUint32(FINAL_SLOT_COUNTS_BASE64)
 }
 
 function splitPinyin(syllable: string): [string, string] {
@@ -157,6 +186,21 @@ export function feedbackCode(
   const a2 = tupleValue(target, bits, 2)
   const a3 = tupleValue(target, bits, 3)
 
+  return feedbackCodeValues(g0, g1, g2, g3, a0, a1, a2, a3, skippedValue)
+}
+
+function feedbackCodeValues(
+  g0: number,
+  g1: number,
+  g2: number,
+  g3: number,
+  a0: number,
+  a1: number,
+  a2: number,
+  a3: number,
+  skippedValue = -1,
+): number {
+
   let s0 = NONE
   let s1 = NONE
   let s2 = NONE
@@ -216,33 +260,16 @@ export function pinyinFeedbackCode(
   targetInitial: number,
   targetFinal: number,
 ): number {
-  const guess = Array.from({ length: WORD_LENGTH }, (_, position) =>
-    pinyinValue(guessInitial, guessFinal, position))
-  const target = Array.from({ length: WORD_LENGTH }, (_, position) =>
-    pinyinValue(targetInitial, targetFinal, position))
-  const statuses = new Uint8Array(WORD_LENGTH)
-  const used = new Uint8Array(WORD_LENGTH)
-
-  for (let position = 0; position < WORD_LENGTH; position++) {
-    if (guess[position] === target[position]) {
-      statuses[position] = EXACT
-      used[position] = 1
-    }
-  }
-
-  for (let guessPosition = 0; guessPosition < WORD_LENGTH; guessPosition++) {
-    if (statuses[guessPosition] === EXACT)
-      continue
-    for (let targetPosition = 0; targetPosition < WORD_LENGTH; targetPosition++) {
-      if (!used[targetPosition] && guess[guessPosition] === target[targetPosition]) {
-        statuses[guessPosition] = MISPLACED
-        used[targetPosition] = 1
-        break
-      }
-    }
-  }
-
-  return statuses[0] + statuses[1] * 3 + statuses[2] * 9 + statuses[3] * 27
+  return feedbackCodeValues(
+    pinyinValue(guessInitial, guessFinal, 0),
+    pinyinValue(guessInitial, guessFinal, 1),
+    pinyinValue(guessInitial, guessFinal, 2),
+    pinyinValue(guessInitial, guessFinal, 3),
+    pinyinValue(targetInitial, targetFinal, 0),
+    pinyinValue(targetInitial, targetFinal, 1),
+    pinyinValue(targetInitial, targetFinal, 2),
+    pinyinValue(targetInitial, targetFinal, 3),
+  )
 }
 
 function matchValue(value: string): number {
@@ -287,6 +314,14 @@ export interface EvalState {
 export interface EvalDiagnosticsState {
   ifRows: Uint32Array
   ifPyRows: Uint32Array
+  pinyinHistory: EvalPinyinHistoryEntry[]
+  pinyinHistoryHash: number
+}
+
+export interface EvalPinyinHistoryEntry {
+  guessInitial: number
+  guessFinal: number
+  code: number
 }
 
 export interface EvalStateOptions {
@@ -304,6 +339,8 @@ export function createEvalState(options: EvalStateOptions = {}): EvalState {
       ? {
           ifRows: allRows(),
           ifPyRows: allRows(),
+          pinyinHistory: [],
+          pinyinHistoryHash: SAMPLE_SEED,
         }
       : undefined,
   }
@@ -540,6 +577,427 @@ export function evaluate(
   }
 }
 
+const JOINT_FEEDBACK_BUCKETS = FEEDBACK_BUCKETS ** 3
+const jointFeedbackCounts = new Uint16Array(JOINT_FEEDBACK_BUCKETS)
+const touchedJointFeedback = new Uint32Array(V3_PARTICLE_COUNT)
+
+const signatureWeights = new Map<number, number>(
+  STRUCTURE_SIGNATURE_KEYS.map((key, index) => [key, STRUCTURE_SIGNATURE_WEIGHTS[index]]),
+)
+
+function equalityPattern4(v0: number, v1: number, v2: number, v3: number): number {
+  let next = 1
+  const l1 = v1 === v0 ? 0 : next++
+  const l2 = v2 === v0 ? 0 : v2 === v1 ? l1 : next++
+  const l3 = v3 === v0 ? 0 : v3 === v1 ? l1 : v3 === v2 ? l2 : next
+  return l1 << 2 | l2 << 4 | l3 << 6
+}
+
+function structureSignature(initial: number, final: number): number {
+  const i0 = tupleValue(initial, INITIAL_BITS, 0)
+  const i1 = tupleValue(initial, INITIAL_BITS, 1)
+  const i2 = tupleValue(initial, INITIAL_BITS, 2)
+  const i3 = tupleValue(initial, INITIAL_BITS, 3)
+  const f0 = tupleValue(final, FINAL_BITS, 0)
+  const f1 = tupleValue(final, FINAL_BITS, 1)
+  const f2 = tupleValue(final, FINAL_BITS, 2)
+  const f3 = tupleValue(final, FINAL_BITS, 3)
+  return equalityPattern4(i0, i1, i2, i3)
+    | equalityPattern4(f0, f1, f2, f3) << 8
+    | equalityPattern4(
+      i0 * FINALS.length + f0,
+      i1 * FINALS.length + f1,
+      i2 * FINALS.length + f2,
+      i3 * FINALS.length + f3,
+    ) << 16
+}
+
+function candidateLogWeight(initial: number, final: number): {
+  valid: boolean
+  logWeight: number
+  signatureClipped: boolean
+} {
+  const syllableCounts = getSyllableCounts()
+  const initialCounts = getInitialSlotCounts()
+  const finalCounts = getFinalSlotCounts()
+  let logWeight = 0
+
+  for (let position = 0; position < WORD_LENGTH; position++) {
+    const initialId = tupleValue(initial, INITIAL_BITS, position)
+    const finalId = tupleValue(final, FINAL_BITS, position)
+    const jointCount = syllableCounts[initialId * FINALS.length + finalId]
+    if (!jointCount)
+      return { valid: false, logWeight: Number.NEGATIVE_INFINITY, signatureClipped: false }
+    logWeight += Math.log(
+      jointCount * SLOT_COUNT / (initialCounts[initialId] * finalCounts[finalId]),
+    )
+  }
+
+  const signatureWeight = signatureWeights.get(structureSignature(initial, final))
+    ?? SIGNATURE_WEIGHT_MIN
+  logWeight += Math.log(signatureWeight)
+  return {
+    valid: true,
+    logWeight,
+    signatureClipped: signatureWeight === SIGNATURE_WEIGHT_MIN
+      || signatureWeight === SIGNATURE_WEIGHT_MAX,
+  }
+}
+
+function satisfiesPinyinHistory(
+  initial: number,
+  final: number,
+  history: readonly EvalPinyinHistoryEntry[],
+): boolean {
+  for (const entry of history) {
+    if (pinyinFeedbackCode(
+      entry.guessInitial,
+      entry.guessFinal,
+      initial,
+      final,
+    ) !== entry.code)
+      return false
+  }
+  return true
+}
+
+export function v3RealMixRatio(effectiveHypotheses: number): number {
+  if (!Number.isFinite(effectiveHypotheses) || effectiveHypotheses <= 0)
+    return 0
+  return effectiveHypotheses / (effectiveHypotheses + 32)
+}
+
+function sampleRealParticles(
+  rows: Uint32Array,
+  count: number,
+  seed: number,
+): EvalParticles {
+  const initials = new Uint32Array(count)
+  const finals = new Uint32Array(count)
+  if (!count || !rows.length)
+    return { initials, finals }
+
+  const corpusInitials = getInitialTuples()
+  const corpusFinals = getFinalTuples()
+  const random = mulberry32(seed)
+  if (rows.length >= count) {
+    const selected = Uint32Array.from(rows.slice(0, count))
+    for (let index = count; index < rows.length; index++) {
+      const replacement = Math.floor(random() * (index + 1))
+      if (replacement < count)
+        selected[replacement] = rows[index]
+    }
+    for (let index = 0; index < count; index++) {
+      initials[index] = corpusInitials[selected[index]]
+      finals[index] = corpusFinals[selected[index]]
+    }
+  }
+  else {
+    for (let index = 0; index < count; index++) {
+      const row = rows[Math.floor(random() * rows.length)]
+      initials[index] = corpusInitials[row]
+      finals[index] = corpusFinals[row]
+    }
+  }
+  return { initials, finals }
+}
+
+function resampledEffectiveSize(initials: Uint32Array, finals: Uint32Array): number {
+  if (!initials.length)
+    return 0
+  const counts = new Map<number, number>()
+  const finalFactor = 2 ** (FINAL_BITS * WORD_LENGTH)
+  for (let index = 0; index < initials.length; index++) {
+    const key = initials[index] * finalFactor + finals[index]
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+  let squared = 0
+  for (const count of counts.values())
+    squared += count * count
+  return initials.length ** 2 / squared
+}
+
+interface V3Particles extends EvalParticles {
+  effectiveHypotheses: number
+  lambda: number
+  realCount: number
+  virtualCount: number
+  attempts: number
+  accepted: number
+  invalidSyllableRejected: number
+  pinyinHistoryRejected: number
+  clippedSignatureCount: number
+  candidateEffective: number
+  resampledEffective: number
+  fallback: boolean
+  generationMs: number
+}
+
+export interface V3ShadowResult {
+  playerEI: number
+  rating: Rating
+  rank: number
+  total: number
+  effectiveHypotheses: number
+  lambda: number
+  realParticles: number
+  virtualParticles: number
+  attempts: number
+  accepted: number
+  acceptanceRate: number
+  invalidSyllableRejected: number
+  pinyinHistoryRejected: number
+  clippedSignatureCount: number
+  candidateEffective: number
+  resampledEffective: number
+  fallback: boolean
+  generationMs: number
+  rankingMs: number
+  elapsedMs: number
+}
+
+function createV3Particles(state: EvalState): V3Particles | null {
+  const startedAt = performance.now()
+  const diagnostics = state.diagnostics
+  if (!diagnostics || !state.valid || !state.initialRows.length || !state.finalRows.length)
+    return null
+
+  const combinedKey = (row: number) =>
+    pinyinTupleKey(getInitialTuples()[row], getFinalTuples()[row])
+  const effectiveHypotheses = hypothesisStats(diagnostics.ifPyRows, combinedKey).effective
+  const lambda = v3RealMixRatio(effectiveHypotheses)
+  let realCount = diagnostics.ifPyRows.length
+    ? Math.round(V3_PARTICLE_COUNT * lambda)
+    : 0
+  let virtualCount = V3_PARTICLE_COUNT - realCount
+  const historySeed = diagnostics.pinyinHistoryHash ^ state.initialHistoryHash
+    ^ state.finalHistoryHash ^ CALIBRATION_SEED
+  const sourceInitials = sampleTuples(
+    state.initialRows,
+    getInitialTuples(),
+    historySeed ^ 0x1A17A1,
+  )
+  const sourceFinals = sampleTuples(
+    state.finalRows,
+    getFinalTuples(),
+    historySeed ^ 0xF1A17A,
+  )
+  const random = mulberry32(historySeed ^ 0x5633CA1B)
+  const poolTarget = virtualCount
+    ? Math.min(V3_VIRTUAL_POOL_LIMIT, Math.max(V3_PARTICLE_COUNT, virtualCount * 4))
+    : 0
+  const candidateInitials: number[] = []
+  const candidateFinals: number[] = []
+  const candidateLogWeights: number[] = []
+  let attempts = 0
+  let invalidSyllableRejected = 0
+  let pinyinHistoryRejected = 0
+  let clippedSignatureCount = 0
+
+  while (
+    candidateInitials.length < poolTarget
+    && attempts < V3_ATTEMPT_LIMIT
+    && sourceInitials.length
+    && sourceFinals.length
+  ) {
+    attempts++
+    const initial = sourceInitials[Math.floor(random() * sourceInitials.length)]
+    const final = sourceFinals[Math.floor(random() * sourceFinals.length)]
+    const weighted = candidateLogWeight(initial, final)
+    if (!weighted.valid) {
+      invalidSyllableRejected++
+      continue
+    }
+    if (!satisfiesPinyinHistory(initial, final, diagnostics.pinyinHistory)) {
+      pinyinHistoryRejected++
+      continue
+    }
+    if (weighted.signatureClipped)
+      clippedSignatureCount++
+    candidateInitials.push(initial)
+    candidateFinals.push(final)
+    candidateLogWeights.push(weighted.logWeight)
+  }
+
+  const virtualInitials = new Uint32Array(virtualCount)
+  const virtualFinals = new Uint32Array(virtualCount)
+  let candidateEffective = 0
+  let fallback = false
+
+  if (virtualCount && candidateInitials.length) {
+    let maximumLogWeight = Number.NEGATIVE_INFINITY
+    for (const value of candidateLogWeights)
+      maximumLogWeight = Math.max(maximumLogWeight, value)
+    const weights = new Float64Array(candidateLogWeights.length)
+    let totalWeight = 0
+    let squaredWeight = 0
+    for (let index = 0; index < weights.length; index++) {
+      const weight = Math.exp(candidateLogWeights[index] - maximumLogWeight)
+      weights[index] = weight
+      totalWeight += weight
+      squaredWeight += weight * weight
+    }
+    candidateEffective = totalWeight * totalWeight / squaredWeight
+
+    const step = totalWeight / virtualCount
+    let point = random() * step
+    let candidateIndex = 0
+    let cumulative = weights[0]
+    for (let index = 0; index < virtualCount; index++, point += step) {
+      while (candidateIndex < weights.length - 1 && point > cumulative) {
+        candidateIndex++
+        cumulative += weights[candidateIndex]
+      }
+      virtualInitials[index] = candidateInitials[candidateIndex]
+      virtualFinals[index] = candidateFinals[candidateIndex]
+    }
+  }
+  else if (virtualCount) {
+    fallback = true
+    realCount = diagnostics.ifPyRows.length ? V3_PARTICLE_COUNT : 0
+    virtualCount = 0
+  }
+
+  if (!realCount && !virtualCount)
+    return null
+
+  const real = sampleRealParticles(
+    diagnostics.ifPyRows,
+    realCount,
+    historySeed ^ 0x3EA1,
+  )
+  const initials = new Uint32Array(V3_PARTICLE_COUNT)
+  const finals = new Uint32Array(V3_PARTICLE_COUNT)
+  initials.set(real.initials)
+  finals.set(real.finals)
+  if (virtualCount) {
+    initials.set(virtualInitials, realCount)
+    finals.set(virtualFinals, realCount)
+  }
+
+  for (let index = initials.length - 1; index > 0; index--) {
+    const swap = Math.floor(random() * (index + 1))
+    ;[initials[index], initials[swap]] = [initials[swap], initials[index]]
+    ;[finals[index], finals[swap]] = [finals[swap], finals[index]]
+  }
+
+  return {
+    initials,
+    finals,
+    effectiveHypotheses,
+    lambda,
+    realCount,
+    virtualCount,
+    attempts,
+    accepted: candidateInitials.length,
+    invalidSyllableRejected,
+    pinyinHistoryRejected,
+    clippedSignatureCount,
+    candidateEffective,
+    resampledEffective: resampledEffectiveSize(
+      virtualInitials.slice(0, virtualCount),
+      virtualFinals.slice(0, virtualCount),
+    ),
+    fallback,
+    generationMs: performance.now() - startedAt,
+  }
+}
+
+function jointFeedbackEntropy(
+  guessInitial: number,
+  guessFinal: number,
+  particles: EvalParticles,
+): number {
+  if (!particles.initials.length)
+    return Number.NaN
+
+  let touchedCount = 0
+  for (let index = 0; index < particles.initials.length; index++) {
+    const initialCode = feedbackCode(
+      guessInitial,
+      particles.initials[index],
+      INITIAL_BITS,
+      NULL_INITIAL_ID,
+    )
+    const finalCode = feedbackCode(
+      guessFinal,
+      particles.finals[index],
+      FINAL_BITS,
+    )
+    const pinyinCode = pinyinFeedbackCode(
+      guessInitial,
+      guessFinal,
+      particles.initials[index],
+      particles.finals[index],
+    )
+    const code = initialCode + finalCode * FEEDBACK_BUCKETS
+      + pinyinCode * FEEDBACK_BUCKETS * FEEDBACK_BUCKETS
+    if (!jointFeedbackCounts[code])
+      touchedJointFeedback[touchedCount++] = code
+    jointFeedbackCounts[code]++
+  }
+
+  let entropy = 0
+  for (let index = 0; index < touchedCount; index++) {
+    const code = touchedJointFeedback[index]
+    const probability = jointFeedbackCounts[code] / particles.initials.length
+    entropy -= probability * Math.log2(probability)
+    jointFeedbackCounts[code] = 0
+  }
+  return entropy
+}
+
+/** Development-only V3 shadow score. It never mutates the V2 state or ratings. */
+export function evaluateV3Shadow(
+  state: EvalState,
+  parsedGuess: readonly ParsedChar[],
+): V3ShadowResult | null {
+  const startedAt = performance.now()
+  const particles = createV3Particles(state)
+  if (!particles)
+    return null
+
+  const rankingStartedAt = performance.now()
+  const guess = parseParsedTuples(parsedGuess)
+  const playerEI = jointFeedbackEntropy(guess.initial, guess.final, particles)
+  const sampledInitials = getSampledInitials()
+  const sampledFinals = getSampledFinals()
+  let lowerCount = 0
+  for (let index = 0; index < SAMPLE_SIZE; index++) {
+    const entropy = jointFeedbackEntropy(
+      sampledInitials[index],
+      sampledFinals[index],
+      particles,
+    )
+    if (entropy < playerEI)
+      lowerCount++
+  }
+  const rankingMs = performance.now() - rankingStartedAt
+
+  return {
+    playerEI,
+    rating: ratingFromPercentile(lowerCount / SAMPLE_SIZE),
+    rank: lowerCount,
+    total: SAMPLE_SIZE,
+    effectiveHypotheses: particles.effectiveHypotheses,
+    lambda: particles.lambda,
+    realParticles: particles.realCount,
+    virtualParticles: particles.virtualCount,
+    attempts: particles.attempts,
+    accepted: particles.accepted,
+    acceptanceRate: particles.attempts ? particles.accepted / particles.attempts : 0,
+    invalidSyllableRejected: particles.invalidSyllableRejected,
+    pinyinHistoryRejected: particles.pinyinHistoryRejected,
+    clippedSignatureCount: particles.clippedSignatureCount,
+    candidateEffective: particles.candidateEffective,
+    resampledEffective: particles.resampledEffective,
+    fallback: particles.fallback,
+    generationMs: particles.generationMs,
+    rankingMs,
+    elapsedMs: performance.now() - startedAt,
+  }
+}
+
 function filterRows(
   rows: Uint32Array,
   corpus: Uint32Array,
@@ -636,6 +1094,23 @@ export function updateState(
       finalCode,
       pinyinCode!,
     )
+    state.diagnostics.pinyinHistory.push({
+      guessInitial: guess.initial,
+      guessFinal: guess.final,
+      code: pinyinCode!,
+    })
+    state.diagnostics.pinyinHistoryHash = hashStep(
+      state.diagnostics.pinyinHistoryHash,
+      guess.initial,
+    )
+    state.diagnostics.pinyinHistoryHash = hashStep(
+      state.diagnostics.pinyinHistoryHash,
+      guess.final,
+    )
+    state.diagnostics.pinyinHistoryHash = hashStep(
+      state.diagnostics.pinyinHistoryHash,
+      pinyinCode!,
+    )
   }
   state.initialHistoryHash = hashStep(state.initialHistoryHash, initialCode)
   state.finalHistoryHash = hashStep(state.finalHistoryHash, finalCode)
@@ -656,6 +1131,37 @@ export const evalTesting = {
   hypothesisStats(keys: readonly (string | number)[]) {
     const rows = Uint32Array.from({ length: keys.length }, (_, index) => index)
     return hypothesisStats(rows, row => keys[row])
+  },
+  legalPinyinCount: LEGAL_PINYIN_COUNT,
+  pinyinIdCount: PINYIN_ID_COUNT,
+  isLegalPinyin(initialId: number, finalId: number) {
+    return getSyllableCounts()[initialId * FINALS.length + finalId] > 0
+  },
+  structureSignature,
+  createV3Particles,
+  jointFeedbackEntropy,
+  corpusParticles(): EvalParticles {
+    return {
+      initials: getInitialTuples(),
+      finals: getFinalTuples(),
+    }
+  },
+  particlesAreValid(state: EvalState, particles: EvalParticles) {
+    const history = state.diagnostics?.pinyinHistory || []
+    for (let index = 0; index < particles.initials.length; index++) {
+      const initial = particles.initials[index]
+      const final = particles.finals[index]
+      for (let position = 0; position < WORD_LENGTH; position++) {
+        if (!getSyllableCounts()[
+          tupleValue(initial, INITIAL_BITS, position) * FINALS.length
+          + tupleValue(final, FINAL_BITS, position)
+        ])
+          return false
+      }
+      if (!satisfiesPinyinHistory(initial, final, history))
+        return false
+    }
+    return true
   },
   stateContains(state: EvalState, parsed: readonly ParsedChar[]) {
     const tuple = parseParsedTuples(parsed)

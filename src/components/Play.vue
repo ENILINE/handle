@@ -281,6 +281,26 @@ watchEffect(() => {
                 <span>IF+PY {{ (entry.ifPyRetained * 100).toFixed(1) }}%</span>
                 <span>{{ entry.elapsedMs.toFixed(1) }} ms</span>
               </div>
+              <div v-if="entry.v2 && entry.v3" mt1 flex="~ wrap gap-x-3 gap-y-1">
+                <span>V2 H={{ entry.v2.playerEI.toFixed(3) }} / {{ entry.v2.rating }} / {{ entry.v2.rank }}名</span>
+                <span>V3 H={{ entry.v3.playerEI.toFixed(3) }} / {{ entry.v3.rating }} / {{ entry.v3.rank }}名</span>
+                <span>排名差 {{ entry.v3.rank - entry.v2.rank >= 0 ? '+' : '' }}{{ entry.v3.rank - entry.v2.rank }}</span>
+              </div>
+              <div v-if="entry.v3" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
+                <span>混合 λ={{ entry.v3.lambda.toFixed(4) }}（有效假设 {{ entry.v3.effectiveHypotheses.toFixed(1) }}）</span>
+                <span>真实/虚拟 {{ entry.v3.realParticles }}/{{ entry.v3.virtualParticles }}</span>
+                <span>候选 {{ entry.v3.accepted }}/{{ entry.v3.attempts }}（{{ (entry.v3.acceptanceRate * 100).toFixed(1) }}%）</span>
+                <span>ESS {{ entry.v3.candidateEffective.toFixed(1) }} → {{ entry.v3.resampledEffective.toFixed(1) }}</span>
+              </div>
+              <div v-if="entry.v3" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
+                <span>非法音节淘汰 {{ entry.v3.invalidSyllableRejected }}</span>
+                <span>全拼历史淘汰 {{ entry.v3.pinyinHistoryRejected }}</span>
+                <span>结构权重截断 {{ entry.v3.clippedSignatureCount }}</span>
+                <span>生成 {{ entry.v3.generationMs.toFixed(1) }} ms</span>
+                <span>排名 {{ entry.v3.rankingMs.toFixed(1) }} ms</span>
+                <span>V3 总计 {{ entry.v3.elapsedMs.toFixed(1) }} ms</span>
+                <span v-if="entry.v3.fallback" text-red>虚拟粒子失败，已回退真实后验</span>
+              </div>
               <div v-if="entry.after.degradation === 'true-saturation'" mt1 text-ok>
                 真实饱和：IF+PY 只剩一种拼音，I/F 有效假设数均不超过 8
               </div>
