@@ -6,8 +6,8 @@ import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
-import { EVAL_VERSION, canAppendEvaluation, canReuseRatings, createEvalState, evaluate, updateState } from './logic/eval'
-import type { EvalResult, EvalState } from './logic/eval'
+import { EVAL_VERSION, canAppendEvaluation, canReuseRatings, createEvalState, evaluate, getEvalDiagnosticSnapshot, updateState } from './logic/eval'
+import type { EvalDiagnosticSnapshot, EvalResult, EvalState } from './logic/eval'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -207,9 +207,22 @@ export function resetCustomGame() {
 
 // ============ Evaluation ============
 
-export const evalState = ref<EvalState>(createEvalState())
+export interface EvalDebugTraceEntry {
+  guess: number
+  word: string
+  before: EvalDiagnosticSnapshot
+  after: EvalDiagnosticSnapshot
+  initialRetained: number
+  finalRetained: number
+  ifRetained: number
+  ifPyRetained: number
+  elapsedMs: number
+}
+
+export const evalState = ref<EvalState>(createEvalState({ diagnostics: isDev }))
 export const triesRatings = computed(() => meta.value.ratings || [])
 export const lastEvalDebug = ref<EvalResult | null>(null)
+export const evalDebugTrace = ref<EvalDebugTraceEntry[]>([])
 
 const evalGameKey = computed(() => {
   if (playMode.value === 'daily')
@@ -230,17 +243,36 @@ function evaluateAndApply(
 ): EvalResult | null {
   try {
     const startedAt = performance.now()
+    const diagnosticsBefore = getEvalDiagnosticSnapshot(state)
     const parsed = parseWord(word)
     const feedback = testAnswer(parsed)
     const result = shouldEvaluate ? evaluate(state, parsed, includeDebug) : null
     const valid = updateState(state, parsed, feedback)
+    const diagnosticsAfter = getEvalDiagnosticSnapshot(state)
+    const elapsedMs = performance.now() - startedAt
     if (result) {
       result.initialPosterior = state.initialRows.length
       result.finalPosterior = state.finalRows.length
-      result.elapsedMs = performance.now() - startedAt
+      result.elapsedMs = elapsedMs
+    }
+    if (diagnosticsBefore && diagnosticsAfter) {
+      const retained = (after: number, before: number) => before ? after / before : 0
+      evalDebugTrace.value.push({
+        guess: evalDebugTrace.value.length + 1,
+        word,
+        before: diagnosticsBefore,
+        after: diagnosticsAfter,
+        initialRetained: retained(diagnosticsAfter.initialRows, diagnosticsBefore.initialRows),
+        finalRetained: retained(diagnosticsAfter.finalRows, diagnosticsBefore.finalRows),
+        ifRetained: retained(diagnosticsAfter.ifRows, diagnosticsBefore.ifRows),
+        ifPyRetained: retained(diagnosticsAfter.ifPyRows, diagnosticsBefore.ifPyRows),
+        elapsedMs,
+      })
     }
     if (!valid && isDev)
       console.warn('[evaluation] posterior became empty', { word, feedback })
+    else if (diagnosticsAfter?.degradation === 'invalid' && isDev)
+      console.warn('[evaluation] diagnostic joint posterior became empty', { word, feedback })
     return valid ? result : null
   }
   catch (error) {
@@ -252,7 +284,7 @@ function evaluateAndApply(
 }
 
 function rebuildEvaluation(words: readonly string[]): void {
-  const state = createEvalState()
+  const state = createEvalState({ diagnostics: isDev })
   const storedRatingsAreCurrent = canReuseRatings(
     meta.value.ratingsVersion,
     meta.value.ratings?.length,
@@ -263,6 +295,7 @@ function rebuildEvaluation(words: readonly string[]): void {
     : Array.from({ length: words.length }, () => null)
 
   lastEvalDebug.value = null
+  evalDebugTrace.value = []
   for (let index = 0; index < words.length; index++) {
     const shouldEvaluate = !storedRatingsAreCurrent || (isDev && index === words.length - 1)
     const result = evaluateAndApply(

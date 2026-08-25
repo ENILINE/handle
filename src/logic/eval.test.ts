@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FINAL_BITS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID } from '../data/eval-data'
+import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID } from '../data/eval-data'
 import {
   createEvalState,
   canAppendEvaluation,
@@ -9,14 +9,21 @@ import {
   evaluate,
   feedbackCode,
   feedbackEntropy,
+  getEvalDiagnosticSnapshot,
+  pinyinFeedbackCode,
   updateState,
 } from './eval'
 import { parseWord, testAnswer } from './utils'
 
 const initialId = new Map<string, number>(INITIALS.map((value, index) => [value, index]))
+const finalId = new Map<string, number>(FINALS.map((value, index) => [value, index]))
 
 function initials(...values: string[]): number {
   return evalTesting.packTuple(values.map(value => initialId.get(value)!), INITIAL_BITS)
+}
+
+function finals(...values: string[]): number {
+  return evalTesting.packTuple(values.map(value => finalId.get(value)!), FINAL_BITS)
 }
 
 function applyGuess(state: ReturnType<typeof createEvalState>, guessWord: string, answerWord: string) {
@@ -46,6 +53,25 @@ describe('joint feedback encoding', () => {
 
     expect(feedbackCode(guess, guess, INITIAL_BITS, NULL_INITIAL_ID))
       .toBe(0 + 2 * 3 + 2 * 9 + 2 * 27)
+  })
+
+  it('matches full-pinyin pairs with exact priority and excess duplicates gray', () => {
+    const guessInitial = initials('sh', 'sh', 'x', 'x')
+    const guessFinal = finals('i', 'i', 'an', 'an')
+    const targetInitial = initials('sh', 'b', 'x', 'x')
+    const targetFinal = finals('i', 'a', 'an', 'an')
+
+    expect(pinyinFeedbackCode(guessInitial, guessFinal, targetInitial, targetFinal))
+      .toBe(2 + 0 * 3 + 2 * 9 + 2 * 27)
+  })
+
+  it('matches repeated misplaced full pinyin from left to right', () => {
+    const guessInitial = initials('sh', 'sh', 'x', 'y')
+    const guessFinal = finals('i', 'i', 'ian', 'ang')
+    const targetInitial = initials('b', 'c', 'sh', 'd')
+    const targetFinal = finals('a', 'e', 'i', 'o')
+
+    expect(pinyinFeedbackCode(guessInitial, guessFinal, targetInitial, targetFinal)).toBe(1)
   })
 })
 
@@ -144,6 +170,83 @@ describe('posterior filtering and ranking', () => {
 
     expect(third).not.toBeNull()
     expect(third!.rank).toBeLessThan(third!.total)
+  })
+})
+
+describe('joint posterior diagnostics', () => {
+  it('is opt-in and does not change the V2 score', () => {
+    const production = createEvalState()
+    const diagnostic = createEvalState({ diagnostics: true })
+    const firstGuess = parseWord('研经铸史')
+    const answer = parseWord('东拼西凑')
+
+    expect(production.diagnostics).toBeUndefined()
+    expect(diagnostic.diagnostics).toBeDefined()
+    expect(evaluate(diagnostic, firstGuess)!.playerEI).toBe(evaluate(production, firstGuess)!.playerEI)
+    expect(evaluate(diagnostic, firstGuess)!.rank).toBe(evaluate(production, firstGuess)!.rank)
+    const feedback = testAnswer(firstGuess, answer)
+    updateState(production, firstGuess, feedback)
+    updateState(diagnostic, firstGuess, feedback)
+    const secondGuess = parseWord('先来后到', '东拼西凑')
+    expect(evaluate(diagnostic, secondGuess)!.playerEI).toBe(evaluate(production, secondGuess)!.playerEI)
+    expect(evaluate(diagnostic, secondGuess)!.rank).toBe(evaluate(production, secondGuess)!.rank)
+    expect(EVAL_VERSION).toBe(2)
+  })
+
+  it('retains the real answer in IF and IF+PY and keeps the sets nested', () => {
+    const state = createEvalState({ diagnostics: true })
+    const answer = parseWord('抽抽搭搭')
+    const guess = parseWord('搭搭撒撒', '抽抽搭搭')
+
+    expect(updateState(state, guess, testAnswer(guess, answer))).toBe(true)
+    expect(evalTesting.stateContains(state, answer)).toEqual({
+      initial: true,
+      final: true,
+      if: true,
+      ifPy: true,
+    })
+
+    const snapshot = getEvalDiagnosticSnapshot(state)!
+    expect(snapshot.ifRows).toBeLessThanOrEqual(snapshot.initialRows)
+    expect(snapshot.ifRows).toBeLessThanOrEqual(snapshot.finalRows)
+    expect(snapshot.ifPyRows).toBeLessThanOrEqual(snapshot.ifRows)
+    expect(snapshot.ifPyUnique).toBeLessThanOrEqual(snapshot.ifUnique)
+  })
+
+  it('counts homophones as repeated weight rather than distinct pinyin hypotheses', () => {
+    const first = evalTesting.pinyinTupleKey(parseWord('哀声叹气'))
+    const second = evalTesting.pinyinTupleKey(parseWord('唉声叹气'))
+    const stats = evalTesting.hypothesisStats([first, second, 'different'])
+
+    expect(first).toBe(second)
+    expect(stats.unique).toBe(2)
+    expect(stats.effective).toBeGreaterThan(1)
+    expect(stats.effective).toBeLessThan(3)
+  })
+
+  it('records non-increasing joint trajectories for all three prompt positions', () => {
+    const cases = [
+      { answer: '东拼西凑', guesses: ['研经铸史', '先来后到', '瑟调琴弄'] },
+      { answer: '筚路蓝缕', guesses: ['研经铸史', '慈眉善目'] },
+      { answer: '避重就轻', guesses: ['研经铸史', '脍炙人口', '急中生智', '亲密无间'] },
+    ]
+
+    for (const item of cases) {
+      const state = createEvalState({ diagnostics: true })
+      const answer = parseWord(item.answer)
+      let previous = getEvalDiagnosticSnapshot(state)!
+
+      for (const word of item.guesses) {
+        const guess = parseWord(word, item.answer)
+        expect(updateState(state, guess, testAnswer(guess, answer))).toBe(true)
+        const current = getEvalDiagnosticSnapshot(state)!
+        expect(current.ifRows).toBeLessThanOrEqual(previous.ifRows)
+        expect(current.ifPyRows).toBeLessThanOrEqual(current.ifRows)
+        expect(current.ifPyRows).toBeLessThanOrEqual(previous.ifPyRows)
+        expect(evalTesting.stateContains(state, answer).ifPy).toBe(true)
+        previous = current
+      }
+    }
   })
 })
 

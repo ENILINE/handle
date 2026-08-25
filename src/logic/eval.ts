@@ -19,6 +19,7 @@ import {
 
 export const EVAL_VERSION = 2
 export const MAX_POSTERIOR_SAMPLES = 4096
+export const DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT = 8
 
 export function canReuseRatings(
   ratingsVersion: number | undefined,
@@ -203,6 +204,47 @@ export function feedbackCode(
   return s0 + s1 * 3 + s2 * 9 + s3 * 27
 }
 
+function pinyinValue(initial: number, final: number, position: number): number {
+  return tupleValue(initial, INITIAL_BITS, position) * (1 << FINAL_BITS)
+    + tupleValue(final, FINAL_BITS, position)
+}
+
+/** Encode full-pinyin feedback while preserving the initial/final pairing. */
+export function pinyinFeedbackCode(
+  guessInitial: number,
+  guessFinal: number,
+  targetInitial: number,
+  targetFinal: number,
+): number {
+  const guess = Array.from({ length: WORD_LENGTH }, (_, position) =>
+    pinyinValue(guessInitial, guessFinal, position))
+  const target = Array.from({ length: WORD_LENGTH }, (_, position) =>
+    pinyinValue(targetInitial, targetFinal, position))
+  const statuses = new Uint8Array(WORD_LENGTH)
+  const used = new Uint8Array(WORD_LENGTH)
+
+  for (let position = 0; position < WORD_LENGTH; position++) {
+    if (guess[position] === target[position]) {
+      statuses[position] = EXACT
+      used[position] = 1
+    }
+  }
+
+  for (let guessPosition = 0; guessPosition < WORD_LENGTH; guessPosition++) {
+    if (statuses[guessPosition] === EXACT)
+      continue
+    for (let targetPosition = 0; targetPosition < WORD_LENGTH; targetPosition++) {
+      if (!used[targetPosition] && guess[guessPosition] === target[targetPosition]) {
+        statuses[guessPosition] = MISPLACED
+        used[targetPosition] = 1
+        break
+      }
+    }
+  }
+
+  return statuses[0] + statuses[1] * 3 + statuses[2] * 9 + statuses[3] * 27
+}
+
 function matchValue(value: string): number {
   if (value === 'exact') return EXACT
   if (value === 'misplaced') return MISPLACED
@@ -212,13 +254,17 @@ function matchValue(value: string): number {
 function observedCode(
   parsed: readonly ParsedChar[],
   results: readonly MatchResult[],
-  dimension: 'initial' | 'final',
+  dimension: 'initial' | 'final' | 'pinyin',
 ): number {
   let code = 0
   let factor = 1
   for (let position = 0; position < WORD_LENGTH; position++) {
     const skipped = dimension === 'initial' && !parsed[position]._1
-    const result = dimension === 'initial' ? results[position]._1 : results[position]._2
+    const result = dimension === 'initial'
+      ? results[position]._1
+      : dimension === 'final'
+        ? results[position]._2
+        : results[position].py
     code += (skipped ? NONE : matchValue(result)) * factor
     factor *= 3
   }
@@ -235,15 +281,121 @@ export interface EvalState {
   initialHistoryHash: number
   finalHistoryHash: number
   valid: boolean
+  diagnostics?: EvalDiagnosticsState
 }
 
-export function createEvalState(): EvalState {
+export interface EvalDiagnosticsState {
+  ifRows: Uint32Array
+  ifPyRows: Uint32Array
+}
+
+export interface EvalStateOptions {
+  diagnostics?: boolean
+}
+
+export function createEvalState(options: EvalStateOptions = {}): EvalState {
   return {
     initialRows: allRows(),
     finalRows: allRows(),
     initialHistoryHash: SAMPLE_SEED,
     finalHistoryHash: SAMPLE_SEED,
     valid: true,
+    diagnostics: options.diagnostics
+      ? {
+          ifRows: allRows(),
+          ifPyRows: allRows(),
+        }
+      : undefined,
+  }
+}
+
+export type EvalDegradation = 'none' | 'true-saturation' | 'corpus-sparse' | 'invalid'
+
+export interface EvalDiagnosticSnapshot {
+  initialRows: number
+  finalRows: number
+  ifRows: number
+  ifPyRows: number
+  initialUnique: number
+  finalUnique: number
+  ifUnique: number
+  ifPyUnique: number
+  initialEffective: number
+  finalEffective: number
+  ifEffective: number
+  ifPyEffective: number
+  degradation: EvalDegradation
+}
+
+interface HypothesisStats {
+  unique: number
+  effective: number
+}
+
+function hypothesisStats(
+  rows: Uint32Array,
+  keyOf: (row: number) => string | number,
+): HypothesisStats {
+  if (!rows.length)
+    return { unique: 0, effective: 0 }
+
+  const counts = new Map<string | number, number>()
+  for (const row of rows) {
+    const key = keyOf(row)
+    counts.set(key, (counts.get(key) || 0) + 1)
+  }
+
+  let entropy = 0
+  for (const count of counts.values()) {
+    const probability = count / rows.length
+    entropy -= probability * Math.log2(probability)
+  }
+  return {
+    unique: counts.size,
+    effective: 2 ** entropy,
+  }
+}
+
+function pinyinTupleKey(initial: number, final: number): string {
+  return `${initial}:${final}`
+}
+
+export function getEvalDiagnosticSnapshot(state: EvalState): EvalDiagnosticSnapshot | null {
+  const diagnostics = state.diagnostics
+  if (!diagnostics)
+    return null
+
+  const initialTuples = getInitialTuples()
+  const finalTuples = getFinalTuples()
+  const initial = hypothesisStats(state.initialRows, row => initialTuples[row])
+  const final = hypothesisStats(state.finalRows, row => finalTuples[row])
+  const combinedKey = (row: number) => pinyinTupleKey(initialTuples[row], finalTuples[row])
+  const joint = hypothesisStats(diagnostics.ifRows, combinedKey)
+  const jointPy = hypothesisStats(diagnostics.ifPyRows, combinedKey)
+
+  let degradation: EvalDegradation = 'none'
+  if (!diagnostics.ifPyRows.length)
+    degradation = 'invalid'
+  else if (jointPy.unique <= 1)
+    degradation = initial.effective <= DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT
+      && final.effective <= DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT
+      ? 'true-saturation'
+      : 'corpus-sparse'
+
+  return {
+    initialRows: state.initialRows.length,
+    finalRows: state.finalRows.length,
+    ifRows: diagnostics.ifRows.length,
+    ifPyRows: diagnostics.ifPyRows.length,
+    initialUnique: initial.unique,
+    finalUnique: final.unique,
+    ifUnique: joint.unique,
+    ifPyUnique: jointPy.unique,
+    initialEffective: initial.effective,
+    finalEffective: final.effective,
+    ifEffective: joint.effective,
+    ifPyEffective: jointPy.effective,
+    degradation,
   }
 }
 
@@ -405,6 +557,43 @@ function filterRows(
   return result.slice(0, count)
 }
 
+function filterJointRows(
+  rows: Uint32Array,
+  guess: { initial: number; final: number },
+  expectedInitialCode: number,
+  expectedFinalCode: number,
+  expectedPinyinCode?: number,
+): Uint32Array {
+  const initialTuples = getInitialTuples()
+  const finalTuples = getFinalTuples()
+  const result = new Uint32Array(rows.length)
+  let count = 0
+
+  for (const row of rows) {
+    const targetInitial = initialTuples[row]
+    const targetFinal = finalTuples[row]
+    if (feedbackCode(
+      guess.initial,
+      targetInitial,
+      INITIAL_BITS,
+      NULL_INITIAL_ID,
+    ) !== expectedInitialCode)
+      continue
+    if (feedbackCode(guess.final, targetFinal, FINAL_BITS) !== expectedFinalCode)
+      continue
+    if (expectedPinyinCode != null && pinyinFeedbackCode(
+      guess.initial,
+      guess.final,
+      targetInitial,
+      targetFinal,
+    ) !== expectedPinyinCode)
+      continue
+    result[count++] = row
+  }
+
+  return result.slice(0, count)
+}
+
 /** Apply the observed feedback after the guess has been scored. */
 export function updateState(
   state: EvalState,
@@ -414,6 +603,9 @@ export function updateState(
   const guess = parseParsedTuples(parsedGuess)
   const initialCode = observedCode(parsedGuess, results, 'initial')
   const finalCode = observedCode(parsedGuess, results, 'final')
+  const pinyinCode = state.diagnostics
+    ? observedCode(parsedGuess, results, 'pinyin')
+    : undefined
 
   state.initialRows = filterRows(
     state.initialRows,
@@ -430,6 +622,21 @@ export function updateState(
     finalCode,
     FINAL_BITS,
   )
+  if (state.diagnostics) {
+    state.diagnostics.ifRows = filterJointRows(
+      state.diagnostics.ifRows,
+      guess,
+      initialCode,
+      finalCode,
+    )
+    state.diagnostics.ifPyRows = filterJointRows(
+      state.diagnostics.ifPyRows,
+      guess,
+      initialCode,
+      finalCode,
+      pinyinCode!,
+    )
+  }
   state.initialHistoryHash = hashStep(state.initialHistoryHash, initialCode)
   state.finalHistoryHash = hashStep(state.finalHistoryHash, finalCode)
   state.valid = state.initialRows.length > 0 && state.finalRows.length > 0
@@ -442,11 +649,31 @@ export const evalTesting = {
   parseParsedTuples,
   packTuple,
   splitPinyin,
+  pinyinTupleKey(parsed: readonly ParsedChar[]) {
+    const tuple = parseParsedTuples(parsed)
+    return pinyinTupleKey(tuple.initial, tuple.final)
+  },
+  hypothesisStats(keys: readonly (string | number)[]) {
+    const rows = Uint32Array.from({ length: keys.length }, (_, index) => index)
+    return hypothesisStats(rows, row => keys[row])
+  },
   stateContains(state: EvalState, parsed: readonly ParsedChar[]) {
     const tuple = parseParsedTuples(parsed)
-    return {
+    const result: {
+      initial: boolean
+      final: boolean
+      if?: boolean
+      ifPy?: boolean
+    } = {
       initial: Array.from(state.initialRows).some(row => getInitialTuples()[row] === tuple.initial),
       final: Array.from(state.finalRows).some(row => getFinalTuples()[row] === tuple.final),
     }
+    if (state.diagnostics) {
+      result.if = Array.from(state.diagnostics.ifRows).some(row =>
+        getInitialTuples()[row] === tuple.initial && getFinalTuples()[row] === tuple.final)
+      result.ifPy = Array.from(state.diagnostics.ifPyRows).some(row =>
+        getInitialTuples()[row] === tuple.initial && getFinalTuples()[row] === tuple.final)
+    }
+    return result
   },
 }

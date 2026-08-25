@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
-import { answer, customOrigin, dayNo, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
+import { answer, customOrigin, dayNo, evalDebugTrace, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
 import { gameMode, markStart, meta, showEval, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
@@ -255,6 +255,45 @@ watchEffect(() => {
         </div>
 
         <!-- Eval debug -->
+        <template v-if="evalDebugTrace.length">
+          <div mt-6 mb-2 op50>
+            联合后验轨迹
+          </div>
+          <div w-full max-w-220 text-xs text-left flex="~ col gap-2">
+            <div
+              v-for="entry of evalDebugTrace"
+              :key="`${entry.guess}-${entry.word}`"
+              border="1 base rounded" p2
+            >
+              <div flex="~ wrap gap-x-3 gap-y-1">
+                <b>#{{ entry.guess }} {{ entry.word }}</b>
+                <span>I {{ entry.after.initialRows }} 行 / {{ entry.after.initialUnique }} 种 / 有效 {{ entry.after.initialEffective.toFixed(1) }}</span>
+                <span>F {{ entry.after.finalRows }} 行 / {{ entry.after.finalUnique }} 种 / 有效 {{ entry.after.finalEffective.toFixed(1) }}</span>
+              </div>
+              <div flex="~ wrap gap-x-3 gap-y-1" mt1>
+                <span>IF {{ entry.after.ifRows }} 行 / {{ entry.after.ifUnique }} 种 / 有效 {{ entry.after.ifEffective.toFixed(1) }}</span>
+                <span>IF+PY {{ entry.after.ifPyRows }} 行 / {{ entry.after.ifPyUnique }} 种 / 有效 {{ entry.after.ifPyEffective.toFixed(1) }}</span>
+              </div>
+              <div flex="~ wrap gap-x-3 gap-y-1" mt1 op60>
+                <span>保留 I {{ (entry.initialRetained * 100).toFixed(1) }}%</span>
+                <span>F {{ (entry.finalRetained * 100).toFixed(1) }}%</span>
+                <span>IF {{ (entry.ifRetained * 100).toFixed(1) }}%</span>
+                <span>IF+PY {{ (entry.ifPyRetained * 100).toFixed(1) }}%</span>
+                <span>{{ entry.elapsedMs.toFixed(1) }} ms</span>
+              </div>
+              <div v-if="entry.after.degradation === 'true-saturation'" mt1 text-ok>
+                真实饱和：IF+PY 只剩一种拼音，I/F 有效假设数均不超过 8
+              </div>
+              <div v-else-if="entry.after.degradation === 'corpus-sparse'" mt1 text-mis>
+                词库稀疏：IF+PY 只剩一种拼音，但 I/F 至少一项仍有超过 8 个有效假设
+              </div>
+              <div v-else-if="entry.after.degradation === 'invalid'" mt1 text-red>
+                异常：联合后验为空
+              </div>
+            </div>
+          </div>
+        </template>
+
         <template v-if="lastEvalDebug">
           <div mt-6 mb-2 op50>
             评价调试
