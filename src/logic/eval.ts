@@ -38,6 +38,7 @@ export const DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT = 8
 export const V3_PARTICLE_COUNT = 4096
 export const V3_VIRTUAL_POOL_LIMIT = 16384
 export const V3_ATTEMPT_LIMIT = 262144
+export const I1_PARTICLE_FULL_WEIGHT_HITS = 8
 
 export function combineExpectedInformation(e1: number, e2: number, toneWeight = TONE_WEIGHT): number {
   return e1 + toneWeight * e2
@@ -522,6 +523,8 @@ export function feedbackEntropy(
 interface FeedbackStatistics {
   entropy: number
   information?: number
+  observedCount?: number
+  sampleSize: number
 }
 
 function feedbackStatistics(
@@ -532,7 +535,7 @@ function feedbackStatistics(
   observed?: number,
 ): FeedbackStatistics {
   if (!targets.length)
-    return { entropy: Number.NaN }
+    return { entropy: Number.NaN, sampleSize: 0 }
 
   const counts = new Uint32Array(FEEDBACK_BUCKETS)
   for (const target of targets)
@@ -547,6 +550,8 @@ function feedbackStatistics(
   const observedCount = observed == null ? undefined : counts[observed]
   return {
     entropy,
+    observedCount,
+    sampleSize: targets.length,
     information: observedCount == null || !observedCount
       ? undefined
       : -Math.log2(observedCount / targets.length),
@@ -597,6 +602,18 @@ export interface EvalBreakdown {
   e2: number
   i1?: number
   i2?: number
+  i1Details?: EvalI1Details
+}
+
+export interface EvalI1Details {
+  particleHits: number
+  particleTotal: number
+  particleProbability: number
+  realHits: number
+  realTotal: number
+  realProbability: number
+  particleWeight: number
+  blendedProbability: number
 }
 
 export interface V2EvalResult extends EvalBreakdown {
@@ -1037,6 +1054,29 @@ function jointFeedbackEntropy(
   return jointFeedbackStatistics(guessInitial, guessFinal, particles).entropy
 }
 
+function jointFeedbackCode(
+  guessInitial: number,
+  guessFinal: number,
+  targetInitial: number,
+  targetFinal: number,
+): number {
+  const initialCode = feedbackCode(
+    guessInitial,
+    targetInitial,
+    INITIAL_BITS,
+    NULL_INITIAL_ID,
+  )
+  const finalCode = feedbackCode(guessFinal, targetFinal, FINAL_BITS)
+  const pinyinCode = pinyinFeedbackCode(
+    guessInitial,
+    guessFinal,
+    targetInitial,
+    targetFinal,
+  )
+  return initialCode + finalCode * FEEDBACK_BUCKETS
+    + pinyinCode * FEEDBACK_BUCKETS * FEEDBACK_BUCKETS
+}
+
 function jointFeedbackStatistics(
   guessInitial: number,
   guessFinal: number,
@@ -1044,29 +1084,16 @@ function jointFeedbackStatistics(
   observed?: number,
 ): FeedbackStatistics {
   if (!particles.initials.length)
-    return { entropy: Number.NaN }
+    return { entropy: Number.NaN, sampleSize: 0 }
 
   let touchedCount = 0
   for (let index = 0; index < particles.initials.length; index++) {
-    const initialCode = feedbackCode(
-      guessInitial,
-      particles.initials[index],
-      INITIAL_BITS,
-      NULL_INITIAL_ID,
-    )
-    const finalCode = feedbackCode(
-      guessFinal,
-      particles.finals[index],
-      FINAL_BITS,
-    )
-    const pinyinCode = pinyinFeedbackCode(
+    const code = jointFeedbackCode(
       guessInitial,
       guessFinal,
       particles.initials[index],
       particles.finals[index],
     )
-    const code = initialCode + finalCode * FEEDBACK_BUCKETS
-      + pinyinCode * FEEDBACK_BUCKETS * FEEDBACK_BUCKETS
     if (!jointFeedbackCounts[code])
       touchedJointFeedback[touchedCount++] = code
     jointFeedbackCounts[code]++
@@ -1083,11 +1110,75 @@ function jointFeedbackStatistics(
       observedCount = count
     jointFeedbackCounts[code] = 0
   }
+  if (observed != null && observedCount == null)
+    observedCount = 0
   return {
     entropy,
+    observedCount,
+    sampleSize: particles.initials.length,
     information: observed == null || !observedCount
       ? undefined
       : -Math.log2(observedCount / particles.initials.length),
+  }
+}
+
+function realJointFeedbackCount(
+  state: EvalState,
+  guessInitial: number,
+  guessFinal: number,
+  observed: number,
+): { hits: number; total: number } | null {
+  const rows = state.diagnostics?.ifPyRows
+  if (!rows?.length)
+    return null
+
+  const initialTuples = getInitialTuples()
+  const finalTuples = getFinalTuples()
+  let hits = 0
+  for (const row of rows) {
+    if (jointFeedbackCode(
+      guessInitial,
+      guessFinal,
+      initialTuples[row],
+      finalTuples[row],
+    ) === observed)
+      hits++
+  }
+  return { hits, total: rows.length }
+}
+
+function smoothstep(value: number): number {
+  const x = Math.max(0, Math.min(1, value))
+  return x * x * (3 - 2 * x)
+}
+
+export function blendI1Probability(
+  particleHits: number,
+  particleTotal: number,
+  realHits: number,
+  realTotal: number,
+  fullWeightHits = I1_PARTICLE_FULL_WEIGHT_HITS,
+): EvalI1Details | null {
+  if (particleTotal <= 0 || realTotal <= 0 || realHits <= 0 || fullWeightHits <= 0)
+    return null
+
+  const particleProbability = particleHits / particleTotal
+  const realProbability = realHits / realTotal
+  const particleWeight = smoothstep(particleHits / fullWeightHits)
+  const blendedProbability = (1 - particleWeight) * realProbability
+    + particleWeight * particleProbability
+  if (!(blendedProbability > 0))
+    return null
+
+  return {
+    particleHits,
+    particleTotal,
+    particleProbability,
+    realHits,
+    realTotal,
+    realProbability,
+    particleWeight,
+    blendedProbability,
   }
 }
 
@@ -1119,6 +1210,22 @@ function analyzeV3Internal(
     particles,
     observedJointCode,
   )
+  const real = observedJointCode == null
+    ? null
+    : realJointFeedbackCount(
+        state,
+        guess.initial,
+        guess.final,
+        observedJointCode,
+      )
+  const i1Details = real && base.observedCount != null
+    ? blendI1Probability(
+        base.observedCount,
+        base.sampleSize,
+        real.hits,
+        real.total,
+      )
+    : null
   const tone = feedbackStatistics(
     guess.tone,
     particles.tones,
@@ -1130,8 +1237,9 @@ function analyzeV3Internal(
     particles,
     e1: base.entropy,
     e2: tone.entropy,
-    i1: base.information,
+    i1: i1Details ? -Math.log2(i1Details.blendedProbability) : undefined,
     i2: tone.information,
+    i1Details: i1Details || undefined,
     playerEI: combineExpectedInformation(base.entropy, tone.entropy),
   }
 }
@@ -1151,6 +1259,7 @@ export function analyzeV3(
     e2: analysis.e2,
     i1: analysis.i1,
     i2: analysis.i2,
+    i1Details: analysis.i1Details,
   }
 }
 
@@ -1165,7 +1274,7 @@ export function evaluate(
   const analysis = analyzeV3Internal(state, parsedGuess, results)
   if (!analysis)
     return null
-  const { particles, e1, e2, i1, i2, playerEI } = analysis
+  const { particles, e1, e2, i1, i2, i1Details, playerEI } = analysis
 
   const rankingStartedAt = performance.now()
   const sampledInitials = getSampledInitials()
@@ -1199,6 +1308,7 @@ export function evaluate(
     e2,
     i1,
     i2,
+    i1Details,
     rating: ratingFromPercentile(lowerCount / SAMPLE_SIZE),
     rank: lowerCount,
     total: SAMPLE_SIZE,

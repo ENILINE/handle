@@ -301,6 +301,14 @@ watchEffect(() => {
                 <span>累计 I2={{ entry.cumulativeI2.toFixed(3) }}</span>
                 <span>累计 I={{ (entry.cumulativeI1 + entry.cumulativeI2).toFixed(3) }}</span>
               </div>
+              <div v-if="entry.analysis?.i1Details" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
+                <span>I1 粒子命中 {{ entry.analysis.i1Details.particleHits }}/{{ entry.analysis.i1Details.particleTotal }}</span>
+                <span>p粒子={{ entry.analysis.i1Details.particleProbability.toExponential(3) }}</span>
+                <span>真实后验命中 {{ entry.analysis.i1Details.realHits }}/{{ entry.analysis.i1Details.realTotal }}</span>
+                <span>p真实={{ entry.analysis.i1Details.realProbability.toExponential(3) }}</span>
+                <span>粒子权重 α={{ entry.analysis.i1Details.particleWeight.toFixed(3) }}</span>
+                <span>p混合={{ entry.analysis.i1Details.blendedProbability.toExponential(3) }}</span>
+              </div>
               <div v-if="entry.v3" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
                 <span>混合 λ={{ entry.v3.lambda.toFixed(4) }}（有效假设 {{ entry.v3.effectiveHypotheses.toFixed(1) }}）</span>
                 <span>真实/虚拟 {{ entry.v3.realParticles }}/{{ entry.v3.virtualParticles }}</span>

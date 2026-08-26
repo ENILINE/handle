@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, TONE_BITS } from '../data/eval-data'
 import {
   analyzeV3,
+  blendI1Probability,
   combineActualInformation,
   combineExpectedInformation,
   createEvalState,
@@ -14,6 +15,7 @@ import {
   feedbackCode,
   feedbackEntropy,
   getEvalDiagnosticSnapshot,
+  I1_PARTICLE_FULL_WEIGHT_HITS,
   pinyinFeedbackCode,
   TONE_WEIGHT,
   updateState,
@@ -169,6 +171,48 @@ describe('posterior filtering and ranking', () => {
     expect(analysis!.i2).toBeTypeOf('number')
     expect(combineExpectedInformation(4, 2, 0.25)).toBe(4.5)
     expect(combineActualInformation(4, 2)).toBe(6)
+  })
+
+  it('smoothly moves I1 from the real posterior to particle frequency over eight hits', () => {
+    const zero = blendI1Probability(0, 4096, 1, 44010)!
+    const middle = blendI1Probability(4, 4096, 1, 44010)!
+    const full = blendI1Probability(8, 4096, 1, 44010)!
+
+    expect(I1_PARTICLE_FULL_WEIGHT_HITS).toBe(8)
+    expect(zero.particleWeight).toBe(0)
+    expect(zero.blendedProbability).toBe(zero.realProbability)
+    expect(middle.particleWeight).toBeCloseTo(0.5, 12)
+    expect(full.particleWeight).toBe(1)
+    expect(full.blendedProbability).toBe(full.particleProbability)
+  })
+
+  it('uses the full real posterior when a high-information opening misses all particles', () => {
+    const state = createEvalState()
+    const answer = parseWord('举一反三')
+    const guess = parseWord('研经铸史', '举一反三')
+    const analysis = analyzeV3(state, guess, testAnswer(guess, answer))!
+
+    expect(analysis.i1Details).toBeDefined()
+    expect(analysis.i1Details!.particleHits).toBe(0)
+    expect(analysis.i1Details!.particleWeight).toBe(0)
+    expect(analysis.i1Details!.realHits).toBeGreaterThan(0)
+    expect(analysis.i1).toBeCloseTo(-Math.log2(analysis.i1Details!.realProbability), 12)
+  })
+
+  it('recovers I1 after a repeated opening followed by a zero-hit diverse guess', () => {
+    const state = createEvalState()
+    const answerWord = '举一反三'
+    applyGuess(state, '慌慌张张', answerWord)
+    const answer = parseWord(answerWord)
+    const guess = parseWord('研经铸史', answerWord)
+    const analysis = analyzeV3(state, guess, testAnswer(guess, answer))!
+
+    expect(analysis.i1Details).toBeDefined()
+    expect(analysis.i1Details!.particleHits).toBe(0)
+    expect(analysis.i1Details!.particleWeight).toBe(0)
+    expect(analysis.i1Details!.realHits).toBeGreaterThan(0)
+    expect(analysis.i1).toBeTypeOf('number')
+    expect(analysis.i1).toBeCloseTo(-Math.log2(analysis.i1Details!.realProbability), 12)
   })
 
   it('keeps common diverse openings above a heavily repeated opening', () => {
