@@ -73,13 +73,26 @@ it('isolates modes, reconstructs persisted information and handles replaced same
   expect(app.evalState.value.information).toEqual(expectedInformation('举一反三', ['搭搭撒撒']))
   expect(storage.meta.value.ratings![0]).not.toBe(oldRating)
 
-  // V3 records require V4 re-evaluation, not just information replay.
+  // V4 records require V5 re-evaluation, not just information replay.
   app.playMode.value = 'daily'
   await nextTick()
-  storage.customMeta.value = { tries: ['研经铸史'], ratings: ['incorrect'], ratingsVersion: 3 }
+  storage.customMeta.value = { tries: ['研经铸史'], ratings: ['incorrect'], ratingsVersion: 4 }
   app.playMode.value = 'custom'
   await nextTick()
-  expect(storage.meta.value.ratingsVersion).toBe(4)
+  expect(storage.meta.value.ratingsVersion).toBe(EVAL_VERSION)
   expect(storage.meta.value.ratings![0]).not.toBe('incorrect')
   expect(app.evalState.value.information).toEqual(expectedInformation('举一反三', ['研经铸史']))
+
+  // A first-guess win receives the special rating and survives stored replay.
+  storage.tries.value = ['举一反三']
+  await nextTick()
+  expect(storage.meta.value.ratings).toEqual(['brilliant'])
+  const winningInformation = { ...app.evalState.value.information }
+  app.playMode.value = 'daily'
+  await nextTick()
+  app.playMode.value = 'custom'
+  await nextTick()
+  expect(storage.meta.value.ratings).toEqual(['brilliant'])
+  expect(app.evalState.value.information).toEqual(winningInformation)
+  expect(app.evalState.value.visibleHistory).toHaveLength(1)
 }, 60000)

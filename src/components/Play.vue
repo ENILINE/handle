@@ -277,6 +277,11 @@ watchEffect(() => {
               </div>
               <template v-if="entry.analysis">
                 <div mt1>
+                  满足全部历史反馈：{{ entry.analysis.matchesHistory ? '是' : '否' }}；
+                  猜中：{{ entry.analysis.won ? '是' : '否' }}；
+                  特殊评级保底：{{ entry.analysis.specialRating ?? '无' }}
+                </div>
+                <div mt1>
                   猜前 N_I × N_F = {{ entry.analysis.initialUnique }} × {{ entry.analysis.finalUnique }}
                   = {{ entry.analysis.posteriorProduct }}；
                   {{ entry.analysis.model === 'endgame' ? '末盘完整加权后验' : 'V3 混合粒子' }}
@@ -318,8 +323,9 @@ watchEffect(() => {
                 超过 {{ entry.result.rank }}/{{ entry.result.total }}；
                 原始 {{ (entry.result.rawPercentile * 100).toFixed(3) }}% →
                 最终 {{ (entry.result.percentile * 100).toFixed(3) }}%；
-                {{ entry.result.rating }}
+                常规 {{ entry.result.normalRating }} → 最终 {{ entry.result.rating }}
               </div>
+              <div v-else-if="entry.rating" mt1>常规评分暂停，采用特殊评级：{{ entry.rating }}</div>
               <div v-if="entry.result?.model === 'v3'" mt1 op60>
                 混合 λ={{ entry.result.lambda.toFixed(4) }}（有效假设 {{ entry.result.effectiveHypotheses.toFixed(1) }}）；
                 真实/虚拟 {{ entry.result.realParticles }}/{{ entry.result.virtualParticles }}；
@@ -350,6 +356,7 @@ watchEffect(() => {
             {{ lastEvalDebug.model === 'endgame' ? '末盘' : 'V3' }} E={{ lastEvalDebug.playerEI.toFixed(3) }}
             （E1={{ lastEvalDebug.e1.toFixed(3) }} + {{ lastEvalDebug.toneWeight.toFixed(3) }} × E2={{ lastEvalDebug.e2.toFixed(3) }}）
             | {{ lastEvalDebug.rating }}
+            （常规 {{ lastEvalDebug.normalRating }} / 特殊 {{ lastEvalDebug.specialRating ?? '无' }}）
             | 超过 {{ lastEvalDebug.rank }}/{{ lastEvalDebug.total }}
             | {{ (lastEvalDebug.rawPercentile * 100).toFixed(3) }}% → {{ (lastEvalDebug.percentile * 100).toFixed(3) }}%
           </div>

@@ -1,5 +1,5 @@
 import { breakpointsTailwind } from '@vueuse/core'
-import type { MatchType, ParsedChar } from './logic'
+import type { MatchType, ParsedChar, Rating } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
 import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
@@ -220,6 +220,7 @@ export interface EvalDebugTraceEntry {
   elapsedMs: number
   analysis?: EvalAnalysis
   result?: EvalResult
+  rating?: Rating
   cumulativeI1: number
   cumulativeI2: number
   missingI1: number
@@ -247,13 +248,13 @@ function evaluateAndApply(
   word: string,
   shouldEvaluate: boolean,
   includeDebug: boolean,
-): EvalResult | null {
+): { result: EvalResult | null; rating: Rating | null } {
   try {
     const startedAt = performance.now()
     const diagnosticsBefore = isDev ? getEvalDiagnosticSnapshot(state) : null
     const parsed = parseWord(word)
     const feedback = testAnswer(parsed)
-    const { result, analysis, valid } = advanceEvaluation(state, parsed, feedback, {
+    const { result, analysis, rating, valid } = advanceEvaluation(state, parsed, feedback, {
       rank: shouldEvaluate, includeDebug,
     })
     const diagnosticsAfter = isDev ? getEvalDiagnosticSnapshot(state) : null
@@ -278,6 +279,7 @@ function evaluateAndApply(
         elapsedMs,
         analysis: analysis || undefined,
         result: result || undefined,
+        rating: shouldEvaluate ? rating ?? undefined : undefined,
         cumulativeI1: state.information.i1,
         cumulativeI2: state.information.i2,
         missingI1: state.information.missingI1,
@@ -290,13 +292,13 @@ function evaluateAndApply(
       console.warn('[evaluation] posterior became empty', { word, feedback })
     else if (diagnosticsAfter?.degradation === 'invalid' && isDev)
       console.warn('[evaluation] diagnostic joint posterior became empty', { word, feedback })
-    return valid ? result : null
+    return valid ? { result, rating } : { result: null, rating: null }
   }
   catch (error) {
     state.valid = false
     if (isDev)
       console.warn('[evaluation] unsupported guess; evaluation disabled for this game', { word, error })
-    return null
+    return { result: null, rating: null }
   }
 }
 
@@ -315,14 +317,14 @@ function rebuildEvaluation(words: readonly string[], replacedHistory = false): v
   evalDebugTrace.value = []
   for (let index = 0; index < words.length; index++) {
     const shouldEvaluate = !storedRatingsAreCurrent || (isDev && index === words.length - 1)
-    const result = evaluateAndApply(
+    const { result, rating } = evaluateAndApply(
       state,
       words[index],
       shouldEvaluate,
       isDev && index === words.length - 1,
     )
     if (!storedRatingsAreCurrent)
-      ratings[index] = result?.rating ?? null
+      ratings[index] = rating
     else if (!state.valid)
       ratings[index] = null
     if (isDev && index === words.length - 1)
@@ -340,8 +342,8 @@ function appendEvaluations(words: readonly string[]): void {
     : []
 
   for (let index = evaluatedWords.length; index < words.length; index++) {
-    const result = evaluateAndApply(evalState.value, words[index], true, isDev)
-    ratings[index] = result?.rating ?? null
+    const { result, rating } = evaluateAndApply(evalState.value, words[index], true, isDev)
+    ratings[index] = rating
     if (isDev)
       lastEvalDebug.value = result
   }

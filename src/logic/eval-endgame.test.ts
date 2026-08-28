@@ -246,13 +246,16 @@ describe('information weights and percentile compression', () => {
       expect(compressPercentile(r, 0.5)).toBe((r + 0.701) / 2)
       expect(compressPercentile(r, 1)).toBe(0.701)
     }
-    expect(ratingFromPercentile(0.70)).toBe('mistake')
+    expect(ratingFromPercentile(0.70)).toBe('average')
     expect(ratingFromPercentile(0.701)).toBe('good')
     expect(ratingFromPercentile(0.90)).toBe('good')
     expect(ratingFromPercentile(0.900001)).toBe('excellent')
     expect(ratingFromPercentile(0.99)).toBe('excellent')
     expect(ratingFromPercentile(0.990001)).toBe('brilliant')
-    expect(ratingFromPercentile(0.40)).toBe('incorrect')
+    expect(ratingFromPercentile(0.50)).toBe('mistake')
+    expect(ratingFromPercentile(0.500001)).toBe('average')
+    expect(ratingFromPercentile(0.30)).toBe('incorrect')
+    expect(ratingFromPercentile(0.300001)).toBe('mistake')
   })
 
   it('never lets the actual answer feedback change this guess score or percentile', () => {

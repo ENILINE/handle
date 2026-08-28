@@ -35,7 +35,7 @@ export interface MatchResult {
   tone: MatchType
 }
 
-export type Rating = 'brilliant' | 'excellent' | 'good' | 'mistake' | 'incorrect'
+export type Rating = 'brilliant' | 'excellent' | 'good' | 'average' | 'mistake' | 'incorrect'
 
 export interface TriesMeta {
   answer?: boolean

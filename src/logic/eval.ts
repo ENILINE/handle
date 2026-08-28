@@ -4,6 +4,8 @@ import { WORD_LENGTH } from './constants'
 import { FEEDBACK_BUCKETS, feedbackCode, jointFeedbackCode, observedCode, packTuple, pinyinFeedbackCode, structureSignature, tupleValue } from './eval-feedback'
 import { ENDGAME_PRODUCT_LIMIT, createEndgamePrior, enumerateEndgame } from './eval-endgame'
 import type { EndgameBudget, EndgamePrior, EndgameSearch, PinyinHistoryEntry } from './eval-endgame'
+import { higherRating, matchesAllFeedback, specialRatingForGuess } from './eval-rating'
+import type { VisibleGuess } from './eval-rating'
 export { feedbackCode, pinyinFeedbackCode } from './eval-feedback'
 import {
   CALIBRATION_SEED,
@@ -37,7 +39,7 @@ import {
   TONE_TUPLES_BASE64,
 } from '../data/eval-data'
 
-export const EVAL_VERSION = 4
+export const EVAL_VERSION = 5
 export const MAX_POSTERIOR_SAMPLES = 4096
 export const V3_PARTICLE_COUNT = 4096
 export const V3_VIRTUAL_POOL_LIMIT = 16384
@@ -204,6 +206,7 @@ function allRows(): Uint32Array {
 
 export interface EvalState {
   history: PinyinHistoryEntry[]
+  visibleHistory: VisibleGuess[]
   information: { i1: number; i2: number; missingI1: number; missingI2: number }
   initialRows: Uint32Array
   finalRows: Uint32Array
@@ -235,6 +238,7 @@ export interface EvalStateOptions {
 export function createEvalState(options: EvalStateOptions = {}): EvalState {
   return {
     history: [],
+    visibleHistory: [],
     information: { i1: 0, i2: 0, missingI1: 0, missingI2: 0 },
     initialRows: allRows(),
     finalRows: allRows(),
@@ -444,7 +448,8 @@ export function ratingFromPercentile(percentile: number): Rating {
   if (percentile > 0.99) return 'brilliant'
   if (percentile > 0.90) return 'excellent'
   if (percentile > 0.70) return 'good'
-  if (percentile > 0.40) return 'mistake'
+  if (percentile > 0.50) return 'average'
+  if (percentile > 0.30) return 'mistake'
   return 'incorrect'
 }
 
@@ -610,6 +615,7 @@ export interface EvalResult extends EvalAnalysis {
   e1: number
   playerEI: number
   rating: Rating
+  normalRating: Rating
   rawPercentile: number
   percentile: number
   rank: number
@@ -909,6 +915,9 @@ export function blendI1Probability(
 }
 
 export interface EvalAnalysis extends EvalBreakdown {
+  matchesHistory: boolean
+  won: boolean
+  specialRating?: Rating
   playerEI?: number
   model: 'v3' | 'endgame'
   initialUnique: number
@@ -954,6 +963,8 @@ function analyzeInternal(
   const startedAt = performance.now()
   const sizes = getPosteriorSizes(state)
   const informationBefore = combineActualInformation(state.information.i1, state.information.i2)
+  const matchesHistory = matchesAllFeedback(parsedGuess, state.visibleHistory)
+  const won = results?.length === WORD_LENGTH && results.every(result => result.char === 'exact')
   const guess = parseParsedTuples(parsedGuess)
   const historySeed = (state.diagnostics?.pinyinHistoryHash ?? SAMPLE_SEED)
     ^ state.initialHistoryHash ^ state.finalHistoryHash ^ CALIBRATION_SEED
@@ -971,6 +982,9 @@ function analyzeInternal(
   }
 
   const analysis: EvalAnalysis = {
+    matchesHistory,
+    won,
+    specialRating: specialRatingForGuess(informationBefore, matchesHistory, won),
     ...sizes,
     model: sizes.posteriorProduct <= ENDGAME_PRODUCT_LIMIT ? 'endgame' : 'v3',
     informationBefore,
@@ -991,7 +1005,7 @@ function analyzeInternal(
   else {
     v3 = createV3Particles(state) || undefined
     particles = v3
-    if (!particles) analysis.reason = '声韵联合后验不可用，本猜不评价'
+    if (!particles) analysis.reason = '声韵联合后验不可用，常规评分暂停'
   }
   analysis.generationMs = performance.now() - startedAt
   if (particles && particles.initials.length && Number.isFinite(e2)) {
@@ -1017,7 +1031,7 @@ function analyzeInternal(
     }
   }
   else if (!analysis.reason) {
-    analysis.reason = '声调后验为空，本猜不评价'
+    analysis.reason = '声调后验为空，常规评分暂停'
   }
   analysis.elapsedMs = performance.now() - startedAt
   return { analysis, particles, tones, v3 }
@@ -1060,9 +1074,10 @@ function rankAnalysis(
   const rankingMs = performance.now() - rankingStartedAt
   const rawPercentile = lowerCount / SAMPLE_SIZE
   const percentile = compressPercentile(rawPercentile, analysis.compression)
+  const normalRating = ratingFromPercentile(percentile)
   return {
     ...analysis, e1, playerEI, rawPercentile, percentile,
-    rating: ratingFromPercentile(percentile), rank: lowerCount, total: SAMPLE_SIZE,
+    normalRating, rating: higherRating(normalRating, analysis.specialRating)!, rank: lowerCount, total: SAMPLE_SIZE,
     initialPosterior: state.initialRows.length,
     finalPosterior: state.finalRows.length,
     tonePosterior: state.toneRows.length,
@@ -1086,7 +1101,7 @@ function rankAnalysis(
   }
 }
 
-/** Pure pre-guess score: actual feedback affects I only, never this guess's E/rank. */
+/** E/rank use pre-guess information only. A win may separately raise the rating. */
 export function evaluate(
   state: EvalState,
   parsedGuess: readonly ParsedChar[],
@@ -1103,11 +1118,13 @@ export function advanceEvaluation(
   parsedGuess: readonly ParsedChar[],
   results: readonly MatchResult[],
   options: { rank?: boolean; includeDebug?: boolean; budget?: EndgameBudget } = {},
-): { analysis: EvalAnalysis; result: EvalResult | null; valid: boolean } {
+): { analysis: EvalAnalysis; result: EvalResult | null; rating: Rating | null; valid: boolean } {
   const context = analyzeInternal(state, parsedGuess, results, options.budget)
   const result = options.rank === false ? null : rankAnalysis(state, context, !!options.includeDebug)
   const valid = updateState(state, parsedGuess, results, context.analysis)
-  return { analysis: context.analysis, result, valid }
+  // A directly established special rating does not need an entropy estimate.
+  const rating = higherRating(result?.rating, context.analysis.specialRating)
+  return { analysis: context.analysis, result, rating, valid }
 }
 
 function filterRows(
@@ -1177,6 +1194,10 @@ export function updateState(
   const toneCode = observedCode(parsedGuess, results, 'tone')
   const pinyinCode = observedCode(parsedGuess, results, 'pinyin')
   state.history.push({ guessInitial: guess.initial, guessFinal: guess.final, initialCode, finalCode, code: pinyinCode })
+  state.visibleHistory.push({
+    guess: parsedGuess.map(char => ({ ...char, parts: [...char.parts] })),
+    feedback: results.map(result => ({ ...result })),
+  })
   if (analysis.i1 != null && Number.isFinite(analysis.i1)) state.information.i1 += analysis.i1
   else state.information.missingI1++
   if (analysis.i2 != null && Number.isFinite(analysis.i2)) state.information.i2 += analysis.i2

@@ -197,8 +197,8 @@ export function enumerateEndgame(
 
   const status = stopped || (initials.length ? 'complete' : 'contradiction')
   const reasons = {
-    'node-limit': `搜索节点超过预算 ${maxNodes}，本猜不评价`,
-    'candidate-limit': `合法候选超过预算 ${maxCandidates}，本猜不评价`,
+    'node-limit': `搜索节点超过预算 ${maxNodes}，常规评分暂停`,
+    'candidate-limit': `合法候选超过预算 ${maxCandidates}，常规评分暂停`,
     'contradiction': '公开反馈与合法音节约束矛盾，没有完整候选',
   }
   if (status !== 'complete') {

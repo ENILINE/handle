@@ -253,8 +253,8 @@ describe('joint posterior diagnostics', () => {
   it('uses joint state for V3 and invalidates the previous persisted version', () => {
     const diagnostic = createEvalState()
     expect(diagnostic.diagnostics).toBeDefined()
-    expect(EVAL_VERSION).toBe(4)
-    expect(canReuseRatings(3, 2, 2)).toBe(false)
+    expect(EVAL_VERSION).toBe(5)
+    expect(canReuseRatings(4, 2, 2)).toBe(false)
   })
 
   it('retains the real answer in IF and IF+PY and keeps the sets nested', () => {
