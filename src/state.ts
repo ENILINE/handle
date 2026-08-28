@@ -120,14 +120,20 @@ export const answer = computed(() => {
 
 export const hint = computed(() => answer.value?.hint || '')
 export const parsedAnswer = computed(() => answer.value?.word ? parseWord(answer.value.word) : [] as unknown as ReturnType<typeof parseWord>)
+const hasActiveAnswer = computed(() => parsedAnswer.value.length === WORD_LENGTH)
 
-export const isPassed = computed(() => meta.value.passed || (tries.value.length > 0 && checkPass(testAnswer(parseWord(tries.value[tries.value.length - 1])))))
+export const isPassed = computed(() => hasActiveAnswer.value
+  && (meta.value.passed || (tries.value.length > 0 && checkPass(testAnswer(parseWord(tries.value[tries.value.length - 1]))))))
 export const isFailed = computed(() => {
+  if (!hasActiveAnswer.value)
+    return false
   if (playMode.value === 'custom' && customOrigin.value === 'own')
     return false
   return !isPassed.value && tries.value.length >= TRIES_LIMIT
 })
 export const isFinished = computed(() => {
+  if (!hasActiveAnswer.value)
+    return false
   if (playMode.value === 'custom' && customOrigin.value === 'own')
     return isPassed.value
   return isPassed.value || !!meta.value.answer
@@ -141,14 +147,18 @@ export function testAnswer(word: ParsedChar[], ans = parsedAnswer.value) {
   return _testAnswer(word, ans)
 }
 
-export const parsedTries = computed(() => tries.value.map((i) => {
-  const word = parseWord(i)
-  const result = testAnswer(word)
-  return {
-    word,
-    result,
-  }
-}))
+export const parsedTries = computed(() => {
+  if (!hasActiveAnswer.value)
+    return []
+  return tries.value.map((i) => {
+    const word = parseWord(i)
+    const result = testAnswer(word)
+    return {
+      word,
+      result,
+    }
+  })
+})
 
 export function getSymbolState(symbol?: string | number, key?: '_1' | '_2' | 'tone' | 'py') {
   const results: MatchType[] = []
@@ -353,9 +363,9 @@ function appendEvaluations(words: readonly string[]): void {
 }
 
 watch(
-  [evalGameKey, () => tries.value.join('\u0000')],
+  [evalGameKey, () => hasActiveAnswer.value ? tries.value.join('\u0000') : ''],
   ([gameKey]) => {
-    const words = [...tries.value]
+    const words = hasActiveAnswer.value ? [...tries.value] : []
     const canAppend = canAppendEvaluation(evaluatedGameKey, evaluatedWords, gameKey, words)
 
     if (canAppend)

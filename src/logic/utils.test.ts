@@ -1,6 +1,6 @@
 // Although illegal idioms cannot pass in strict mode, for ease of understanding, the following test may contain illegal idioms.
 import { describe, expect, it } from 'vitest'
-import { checkHardMode } from './utils'
+import { checkHardMode, checkPass, testAnswer } from './utils'
 import type { MatchResult, ParsedChar } from './types'
 
 function pc(char: string, _1 = '', _2 = '', _3 = '', tone = 0): ParsedChar {
@@ -10,6 +10,15 @@ function pc(char: string, _1 = '', _2 = '', _3 = '', tone = 0): ParsedChar {
 function mr(overrides: Partial<MatchResult> = {}): MatchResult {
   return { char: 'none', _1: 'none', _2: 'none', _3: 'none', py: 'none', tone: 'none', ...overrides }
 }
+
+describe('incomplete game restoration', () => {
+  it('returns no feedback instead of indexing a missing answer', () => {
+    const guess = [pc('先'), pc('来'), pc('后'), pc('到')]
+    expect(testAnswer(guess, [])).toEqual([])
+    expect(testAnswer([], [])).toEqual([])
+    expect(checkPass([])).toBe(false)
+  })
+})
 
 describe('checkHardMode', () => {
   it('allows first guess (empty previousTries)', () => {

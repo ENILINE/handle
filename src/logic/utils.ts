@@ -67,6 +67,11 @@ export function parseWord(word: string, answer?: string, mode?: InputMode, spMod
 }
 
 export function testAnswer(input: ParsedChar[], answer: ParsedChar[]) {
+  // During mode restoration the answer can temporarily be unavailable. An
+  // incomplete pair has no meaningful feedback and must not be indexed.
+  if (!input.length || input.length !== answer.length)
+    return []
+
   const unmatched = {
     char: answer
       .map((a, i) => toSimplified(input[i].char) === toSimplified(a.char) ? undefined : toSimplified(a.char))
@@ -128,7 +133,7 @@ export function testAnswer(input: ParsedChar[], answer: ParsedChar[]) {
 }
 
 export function checkPass(result: MatchResult[]) {
-  return result.every(r => r.char === 'exact')
+  return result.length > 0 && result.every(r => r.char === 'exact')
 }
 
 export function getHint(word: string) {
