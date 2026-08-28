@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, TONE_BITS } from '../data/eval-data'
 import {
-  analyzeV3,
+  analyzeGuess,
   blendI1Probability,
   combineActualInformation,
   combineExpectedInformation,
@@ -11,13 +11,11 @@ import {
   EVAL_VERSION,
   evalTesting,
   evaluate,
-  evaluateV2,
   feedbackCode,
   feedbackEntropy,
   getEvalDiagnosticSnapshot,
   I1_PARTICLE_FULL_WEIGHT_HITS,
   pinyinFeedbackCode,
-  TONE_WEIGHT,
   updateState,
   v3RealMixRatio,
 } from './eval'
@@ -152,7 +150,7 @@ describe('posterior filtering and ranking', () => {
     expect(second).not.toBeNull()
     expect(second!.playerEI).toBe(first!.playerEI)
     expect(second!.rank).toBe(first!.rank)
-    expect(first!.playerEI).toBeCloseTo(first!.e1 + first!.e2, 12)
+    expect(first!.playerEI).toBeCloseTo(first!.e1 + 0.5 * first!.e2, 12)
     expect(first!.toneParticles).toBe(4096)
     expect(first!.initialParticles).toBe(4096)
     expect(first!.finalParticles).toBe(4096)
@@ -163,10 +161,10 @@ describe('posterior filtering and ranking', () => {
     const state = createEvalState()
     const answer = parseWord('东拼西凑')
     const guess = parseWord('研经铸史', '东拼西凑')
-    const analysis = analyzeV3(state, guess, testAnswer(guess, answer))
+    const analysis = analyzeGuess(state, guess, testAnswer(guess, answer))
 
     expect(analysis).not.toBeNull()
-    expect(analysis!.playerEI).toBeCloseTo(analysis!.e1 + TONE_WEIGHT * analysis!.e2, 12)
+    expect(analysis!.playerEI).toBeCloseTo(analysis!.e1! + analysis.toneWeight * analysis!.e2, 12)
     expect(analysis!.i1).toBeTypeOf('number')
     expect(analysis!.i2).toBeTypeOf('number')
     expect(combineExpectedInformation(4, 2, 0.25)).toBe(4.5)
@@ -190,7 +188,7 @@ describe('posterior filtering and ranking', () => {
     const state = createEvalState()
     const answer = parseWord('举一反三')
     const guess = parseWord('研经铸史', '举一反三')
-    const analysis = analyzeV3(state, guess, testAnswer(guess, answer))!
+    const analysis = analyzeGuess(state, guess, testAnswer(guess, answer))!
 
     expect(analysis.i1Details).toBeDefined()
     expect(analysis.i1Details!.particleHits).toBe(0)
@@ -205,7 +203,7 @@ describe('posterior filtering and ranking', () => {
     applyGuess(state, '慌慌张张', answerWord)
     const answer = parseWord(answerWord)
     const guess = parseWord('研经铸史', answerWord)
-    const analysis = analyzeV3(state, guess, testAnswer(guess, answer))!
+    const analysis = analyzeGuess(state, guess, testAnswer(guess, answer))!
 
     expect(analysis.i1Details).toBeDefined()
     expect(analysis.i1Details!.particleHits).toBe(0)
@@ -252,25 +250,11 @@ describe('posterior filtering and ranking', () => {
 })
 
 describe('joint posterior diagnostics', () => {
-  it('keeps V2 available as a debug comparison while V3 requires joint state', () => {
-    const production = createEvalState({ diagnostics: false })
-    const diagnostic = createEvalState({ diagnostics: true })
-    const firstGuess = parseWord('研经铸史')
-    const answer = parseWord('东拼西凑')
-
-    expect(production.diagnostics).toBeUndefined()
+  it('uses joint state for V3 and invalidates the previous persisted version', () => {
+    const diagnostic = createEvalState()
     expect(diagnostic.diagnostics).toBeDefined()
-    expect(evaluate(production, firstGuess)).toBeNull()
-    expect(evaluateV2(diagnostic, firstGuess)!.playerEI).toBe(evaluateV2(production, firstGuess)!.playerEI)
-    expect(evaluateV2(diagnostic, firstGuess)!.rank).toBe(evaluateV2(production, firstGuess)!.rank)
-    const feedback = testAnswer(firstGuess, answer)
-    updateState(production, firstGuess, feedback)
-    updateState(diagnostic, firstGuess, feedback)
-    const secondGuess = parseWord('先来后到', '东拼西凑')
-    expect(evaluateV2(diagnostic, secondGuess)!.playerEI).toBe(evaluateV2(production, secondGuess)!.playerEI)
-    expect(evaluateV2(diagnostic, secondGuess)!.rank).toBe(evaluateV2(production, secondGuess)!.rank)
-    expect(EVAL_VERSION).toBe(3)
-    expect(TONE_WEIGHT).toBe(1)
+    expect(EVAL_VERSION).toBe(4)
+    expect(canReuseRatings(3, 2, 2)).toBe(false)
   })
 
   it('retains the real answer in IF and IF+PY and keeps the sets nested', () => {

@@ -1,8 +1,14 @@
 import type { MatchResult, ParsedChar, Rating } from './types'
 import { getPinyin } from './idioms'
 import { WORD_LENGTH } from './constants'
+import { FEEDBACK_BUCKETS, feedbackCode, jointFeedbackCode, observedCode, packTuple, pinyinFeedbackCode, structureSignature, tupleValue } from './eval-feedback'
+import { ENDGAME_PRODUCT_LIMIT, createEndgamePrior, enumerateEndgame } from './eval-endgame'
+import type { EndgameBudget, EndgamePrior, EndgameSearch, PinyinHistoryEntry } from './eval-endgame'
+export { feedbackCode, pinyinFeedbackCode } from './eval-feedback'
 import {
   CALIBRATION_SEED,
+  ENDGAME_SIGNATURE_KEYS,
+  ENDGAME_SIGNATURE_WEIGHTS,
   EVAL_ROW_COUNT,
   FINAL_BITS,
   FINAL_SLOT_COUNTS_BASE64,
@@ -31,21 +37,35 @@ import {
   TONE_TUPLES_BASE64,
 } from '../data/eval-data'
 
-export const EVAL_VERSION = 3
-export const TONE_WEIGHT = 1
+export const EVAL_VERSION = 4
 export const MAX_POSTERIOR_SAMPLES = 4096
-export const DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT = 8
 export const V3_PARTICLE_COUNT = 4096
 export const V3_VIRTUAL_POOL_LIMIT = 16384
 export const V3_ATTEMPT_LIMIT = 262144
 export const I1_PARTICLE_FULL_WEIGHT_HITS = 8
 
-export function combineExpectedInformation(e1: number, e2: number, toneWeight = TONE_WEIGHT): number {
+export function combineExpectedInformation(e1: number, e2: number, toneWeight: number): number {
   return e1 + toneWeight * e2
 }
 
 export function combineActualInformation(i1: number, i2: number): number {
   return i1 + i2
+}
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
+export function toneWeightForInformation(information: number): number {
+  return 0.5 + 0.5 * clamp01((information - 10) / 10)
+}
+
+export function compressionForInformation(information: number, posteriorProduct: number): number {
+  return posteriorProduct <= ENDGAME_PRODUCT_LIMIT ? 1 : clamp01((information - 23) / 7)
+}
+
+export function compressPercentile(percentile: number, compression: number): number {
+  return percentile <= 0.70 ? percentile : (1 - compression) * percentile + compression * 0.701
 }
 
 export function canReuseRatings(
@@ -66,11 +86,6 @@ export function canAppendEvaluation(
     && previousWords.length < words.length
     && previousWords.every((word, index) => word === words[index])
 }
-
-const NONE = 0
-const MISPLACED = 1
-const EXACT = 2
-const FEEDBACK_BUCKETS = 3 ** WORD_LENGTH
 
 const initialIndex = new Map<string, number>(INITIALS.map((value, index) => [value, index]))
 const finalIndex = new Map<string, number>(FINALS.map((value, index) => [value, index]))
@@ -152,12 +167,6 @@ function splitPinyin(syllable: string): [string, string] {
   return ['null', base]
 }
 
-function packTuple(values: readonly number[], bits: number): number {
-  let packed = 0
-  for (let position = 0; position < WORD_LENGTH; position++)
-    packed |= values[position] << (position * bits)
-  return packed >>> 0
-}
 
 function parsePinyins(pinyins: readonly string[]): { initial: number; final: number; tone: number } {
   const initials: number[] = []
@@ -180,7 +189,7 @@ function parsePinyins(pinyins: readonly string[]): { initial: number; final: num
   }
 }
 
-function parseWordTuples(word: string): { initial: number; final: number } {
+function parseWordTuples(word: string): { initial: number; final: number; tone: number } {
   return parsePinyins(getPinyin(word))
 }
 
@@ -188,149 +197,14 @@ function parseParsedTuples(parsed: readonly ParsedChar[]): { initial: number; fi
   return parsePinyins(parsed.map(char => `${char.yin}${char.tone || ''}`))
 }
 
-function tupleValue(tuple: number, bits: number, position: number): number {
-  return tuple >>> (position * bits) & ((1 << bits) - 1)
-}
-
-/**
- * Encode the four-position Wordle feedback for one pinyin dimension.
- * Base-3 digits are none=0, misplaced=1, exact=2.
- * A skipped value (the null initial) is not a query and always contributes 0.
- */
-export function feedbackCode(
-  guess: number,
-  target: number,
-  bits: number,
-  skippedValue = -1,
-): number {
-  const g0 = tupleValue(guess, bits, 0)
-  const g1 = tupleValue(guess, bits, 1)
-  const g2 = tupleValue(guess, bits, 2)
-  const g3 = tupleValue(guess, bits, 3)
-  const a0 = tupleValue(target, bits, 0)
-  const a1 = tupleValue(target, bits, 1)
-  const a2 = tupleValue(target, bits, 2)
-  const a3 = tupleValue(target, bits, 3)
-
-  return feedbackCodeValues(g0, g1, g2, g3, a0, a1, a2, a3, skippedValue)
-}
-
-function feedbackCodeValues(
-  g0: number,
-  g1: number,
-  g2: number,
-  g3: number,
-  a0: number,
-  a1: number,
-  a2: number,
-  a3: number,
-  skippedValue = -1,
-): number {
-
-  let s0 = NONE
-  let s1 = NONE
-  let s2 = NONE
-  let s3 = NONE
-  let used = 0
-
-  if (g0 !== skippedValue && g0 === a0) { s0 = EXACT; used |= 1 }
-  if (g1 !== skippedValue && g1 === a1) { s1 = EXACT; used |= 2 }
-  if (g2 !== skippedValue && g2 === a2) { s2 = EXACT; used |= 4 }
-  if (g3 !== skippedValue && g3 === a3) { s3 = EXACT; used |= 8 }
-
-  const usedBefore0 = used
-  if (g0 !== skippedValue && s0 !== EXACT) {
-    if (!(used & 1) && g0 === a0) used |= 1
-    else if (!(used & 2) && g0 === a1) used |= 2
-    else if (!(used & 4) && g0 === a2) used |= 4
-    else if (!(used & 8) && g0 === a3) used |= 8
-    if (used !== usedBefore0) s0 = MISPLACED
-  }
-  const usedAfter0 = used
-  if (g1 !== skippedValue && s1 !== EXACT) {
-    if (!(used & 1) && g1 === a0) used |= 1
-    else if (!(used & 2) && g1 === a1) used |= 2
-    else if (!(used & 4) && g1 === a2) used |= 4
-    else if (!(used & 8) && g1 === a3) used |= 8
-    if (used !== usedAfter0) s1 = MISPLACED
-  }
-  const usedAfter1 = used
-  if (g2 !== skippedValue && s2 !== EXACT) {
-    if (!(used & 1) && g2 === a0) used |= 1
-    else if (!(used & 2) && g2 === a1) used |= 2
-    else if (!(used & 4) && g2 === a2) used |= 4
-    else if (!(used & 8) && g2 === a3) used |= 8
-    if (used !== usedAfter1) s2 = MISPLACED
-  }
-  const usedAfter2 = used
-  if (g3 !== skippedValue && s3 !== EXACT) {
-    if (!(used & 1) && g3 === a0) used |= 1
-    else if (!(used & 2) && g3 === a1) used |= 2
-    else if (!(used & 4) && g3 === a2) used |= 4
-    else if (!(used & 8) && g3 === a3) used |= 8
-    if (used !== usedAfter2) s3 = MISPLACED
-  }
-
-  return s0 + s1 * 3 + s2 * 9 + s3 * 27
-}
-
-function pinyinValue(initial: number, final: number, position: number): number {
-  return tupleValue(initial, INITIAL_BITS, position) * (1 << FINAL_BITS)
-    + tupleValue(final, FINAL_BITS, position)
-}
-
-/** Encode full-pinyin feedback while preserving the initial/final pairing. */
-export function pinyinFeedbackCode(
-  guessInitial: number,
-  guessFinal: number,
-  targetInitial: number,
-  targetFinal: number,
-): number {
-  return feedbackCodeValues(
-    pinyinValue(guessInitial, guessFinal, 0),
-    pinyinValue(guessInitial, guessFinal, 1),
-    pinyinValue(guessInitial, guessFinal, 2),
-    pinyinValue(guessInitial, guessFinal, 3),
-    pinyinValue(targetInitial, targetFinal, 0),
-    pinyinValue(targetInitial, targetFinal, 1),
-    pinyinValue(targetInitial, targetFinal, 2),
-    pinyinValue(targetInitial, targetFinal, 3),
-  )
-}
-
-function matchValue(value: string): number {
-  if (value === 'exact') return EXACT
-  if (value === 'misplaced') return MISPLACED
-  return NONE
-}
-
-function observedCode(
-  parsed: readonly ParsedChar[],
-  results: readonly MatchResult[],
-  dimension: 'initial' | 'final' | 'pinyin' | 'tone',
-): number {
-  let code = 0
-  let factor = 1
-  for (let position = 0; position < WORD_LENGTH; position++) {
-    const skipped = dimension === 'initial' && !parsed[position]._1
-    const result = dimension === 'initial'
-      ? results[position]._1
-      : dimension === 'final'
-        ? results[position]._2
-        : dimension === 'pinyin'
-          ? results[position].py
-          : results[position].tone
-    code += (skipped ? NONE : matchValue(result)) * factor
-    factor *= 3
-  }
-  return code
-}
 
 function allRows(): Uint32Array {
   return Uint32Array.from({ length: EVAL_ROW_COUNT }, (_, index) => index)
 }
 
 export interface EvalState {
+  history: PinyinHistoryEntry[]
+  information: { i1: number; i2: number; missingI1: number; missingI2: number }
   initialRows: Uint32Array
   finalRows: Uint32Array
   toneRows: Uint32Array
@@ -360,6 +234,8 @@ export interface EvalStateOptions {
 
 export function createEvalState(options: EvalStateOptions = {}): EvalState {
   return {
+    history: [],
+    information: { i1: 0, i2: 0, missingI1: 0, missingI2: 0 },
     initialRows: allRows(),
     finalRows: allRows(),
     toneRows: allRows(),
@@ -378,7 +254,7 @@ export function createEvalState(options: EvalStateOptions = {}): EvalState {
   }
 }
 
-export type EvalDegradation = 'none' | 'true-saturation' | 'corpus-sparse' | 'invalid'
+export type EvalDegradation = 'none' | 'corpus-saturated' | 'corpus-sparse' | 'invalid'
 
 export interface EvalDiagnosticSnapshot {
   initialRows: number
@@ -450,11 +326,10 @@ export function getEvalDiagnosticSnapshot(state: EvalState): EvalDiagnosticSnaps
   let degradation: EvalDegradation = 'none'
   if (!diagnostics.ifPyRows.length)
     degradation = 'invalid'
+  else if (initial.unique * final.unique <= ENDGAME_PRODUCT_LIMIT)
+    degradation = 'corpus-saturated'
   else if (jointPy.unique <= 1)
-    degradation = initial.effective <= DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT
-      && final.effective <= DIAGNOSTIC_SATURATION_EFFECTIVE_LIMIT
-      ? 'true-saturation'
-      : 'corpus-sparse'
+    degradation = 'corpus-sparse'
 
   return {
     initialRows: state.initialRows.length,
@@ -561,32 +436,15 @@ function feedbackStatistics(
 interface EvalParticles {
   initials: Uint32Array
   finals: Uint32Array
+  weights?: Float64Array
 }
 
-interface V2Particles extends EvalParticles {
-  tones: Uint32Array
-}
 
-function createParticles(state: EvalState): V2Particles | null {
-  if (!state.valid || !state.initialRows.length || !state.finalRows.length || !state.toneRows.length)
-    return null
-  return {
-    initials: sampleTuples(state.initialRows, getInitialTuples(), state.initialHistoryHash ^ 0x49A7E1),
-    finals: sampleTuples(state.finalRows, getFinalTuples(), state.finalHistoryHash ^ 0xF17A1),
-    tones: sampleTuples(state.toneRows, getToneTuples(), state.toneHistoryHash ^ 0x70AE1),
-  }
-}
-
-function v2BaseScore(initial: number, final: number, particles: EvalParticles): number {
-  return feedbackEntropy(initial, particles.initials, INITIAL_BITS, NULL_INITIAL_ID)
-    + feedbackEntropy(final, particles.finals, FINAL_BITS)
-}
-
-function ratingFromPercentile(percentile: number): Rating {
-  if (percentile >= 0.99) return 'brilliant'
-  if (percentile >= 0.90) return 'excellent'
-  if (percentile >= 0.70) return 'good'
-  if (percentile >= 0.40) return 'mistake'
+export function ratingFromPercentile(percentile: number): Rating {
+  if (percentile > 0.99) return 'brilliant'
+  if (percentile > 0.90) return 'excellent'
+  if (percentile > 0.70) return 'good'
+  if (percentile > 0.40) return 'mistake'
   return 'incorrect'
 }
 
@@ -598,7 +456,7 @@ export interface EvalDebugEntry {
 }
 
 export interface EvalBreakdown {
-  e1: number
+  e1?: number
   e2: number
   i1?: number
   i2?: number
@@ -616,131 +474,15 @@ export interface EvalI1Details {
   blendedProbability: number
 }
 
-export interface V2EvalResult extends EvalBreakdown {
-  playerEI: number
-  rating: Rating
-  rank: number
-  total: number
-  initialPosterior: number
-  finalPosterior: number
-  tonePosterior: number
-  initialParticles: number
-  finalParticles: number
-  toneParticles: number
-  elapsedMs: number
-  sampled?: EvalDebugEntry[]
-}
-
-export function evaluateV2(
-  state: EvalState,
-  parsedGuess: readonly ParsedChar[],
-  includeDebug = false,
-  results?: readonly MatchResult[],
-): V2EvalResult | null {
-  const startedAt = performance.now()
-  const particles = createParticles(state)
-  if (!particles)
-    return null
-
-  const guess = parseParsedTuples(parsedGuess)
-  const initial = feedbackStatistics(
-    guess.initial,
-    particles.initials,
-    INITIAL_BITS,
-    NULL_INITIAL_ID,
-    results ? observedCode(parsedGuess, results, 'initial') : undefined,
-  )
-  const final = feedbackStatistics(
-    guess.final,
-    particles.finals,
-    FINAL_BITS,
-    -1,
-    results ? observedCode(parsedGuess, results, 'final') : undefined,
-  )
-  const tone = feedbackStatistics(
-    guess.tone,
-    particles.tones,
-    TONE_BITS,
-    -1,
-    results ? observedCode(parsedGuess, results, 'tone') : undefined,
-  )
-  const e1 = initial.entropy + final.entropy
-  const e2 = tone.entropy
-  const playerEI = combineExpectedInformation(e1, e2)
-  const i1 = initial.information == null || final.information == null
-    ? undefined
-    : initial.information + final.information
-  const i2 = tone.information
-  const sampledInitials = getSampledInitials()
-  const sampledFinals = getSampledFinals()
-  const sampledTones = getSampledTones()
-  const entries: EvalDebugEntry[] | undefined = includeDebug ? [] : undefined
-  let lowerCount = 0
-
-  for (let index = 0; index < SAMPLE_SIZE; index++) {
-    const benchmarkE1 = v2BaseScore(sampledInitials[index], sampledFinals[index], particles)
-    const benchmarkE2 = feedbackEntropy(sampledTones[index], particles.tones, TONE_BITS)
-    const ei = combineExpectedInformation(benchmarkE1, benchmarkE2)
-    if (ei < playerEI)
-      lowerCount++
-    entries?.push({ word: SAMPLED_WORDS[index], ei, e1: benchmarkE1, e2: benchmarkE2 })
-  }
-  entries?.sort((left, right) => right.ei - left.ei)
-
-  return {
-    playerEI,
-    e1,
-    e2,
-    i1,
-    i2,
-    rating: ratingFromPercentile(lowerCount / SAMPLE_SIZE),
-    rank: lowerCount,
-    total: SAMPLE_SIZE,
-    initialPosterior: state.initialRows.length,
-    finalPosterior: state.finalRows.length,
-    tonePosterior: state.toneRows.length,
-    initialParticles: particles.initials.length,
-    finalParticles: particles.finals.length,
-    toneParticles: particles.tones.length,
-    elapsedMs: performance.now() - startedAt,
-    sampled: entries,
-  }
-}
 
 const JOINT_FEEDBACK_BUCKETS = FEEDBACK_BUCKETS ** 3
-const jointFeedbackCounts = new Uint16Array(JOINT_FEEDBACK_BUCKETS)
-const touchedJointFeedback = new Uint32Array(V3_PARTICLE_COUNT)
+const jointFeedbackCounts = new Float64Array(JOINT_FEEDBACK_BUCKETS)
+const touchedJointFeedback = new Uint32Array(JOINT_FEEDBACK_BUCKETS)
 
 const signatureWeights = new Map<number, number>(
   STRUCTURE_SIGNATURE_KEYS.map((key, index) => [key, STRUCTURE_SIGNATURE_WEIGHTS[index]]),
 )
 
-function equalityPattern4(v0: number, v1: number, v2: number, v3: number): number {
-  let next = 1
-  const l1 = v1 === v0 ? 0 : next++
-  const l2 = v2 === v0 ? 0 : v2 === v1 ? l1 : next++
-  const l3 = v3 === v0 ? 0 : v3 === v1 ? l1 : v3 === v2 ? l2 : next
-  return l1 << 2 | l2 << 4 | l3 << 6
-}
-
-function structureSignature(initial: number, final: number): number {
-  const i0 = tupleValue(initial, INITIAL_BITS, 0)
-  const i1 = tupleValue(initial, INITIAL_BITS, 1)
-  const i2 = tupleValue(initial, INITIAL_BITS, 2)
-  const i3 = tupleValue(initial, INITIAL_BITS, 3)
-  const f0 = tupleValue(final, FINAL_BITS, 0)
-  const f1 = tupleValue(final, FINAL_BITS, 1)
-  const f2 = tupleValue(final, FINAL_BITS, 2)
-  const f3 = tupleValue(final, FINAL_BITS, 3)
-  return equalityPattern4(i0, i1, i2, i3)
-    | equalityPattern4(f0, f1, f2, f3) << 8
-    | equalityPattern4(
-      i0 * FINALS.length + f0,
-      i1 * FINALS.length + f1,
-      i2 * FINALS.length + f2,
-      i3 * FINALS.length + f3,
-    ) << 16
-}
 
 function candidateLogWeight(initial: number, final: number): {
   valid: boolean
@@ -864,9 +606,12 @@ interface V3Particles extends EvalParticles {
   generationMs: number
 }
 
-export interface EvalResult extends EvalBreakdown {
+export interface EvalResult extends EvalAnalysis {
+  e1: number
   playerEI: number
   rating: Rating
+  rawPercentile: number
+  percentile: number
   rank: number
   total: number
   initialPosterior: number
@@ -1054,28 +799,6 @@ function jointFeedbackEntropy(
   return jointFeedbackStatistics(guessInitial, guessFinal, particles).entropy
 }
 
-function jointFeedbackCode(
-  guessInitial: number,
-  guessFinal: number,
-  targetInitial: number,
-  targetFinal: number,
-): number {
-  const initialCode = feedbackCode(
-    guessInitial,
-    targetInitial,
-    INITIAL_BITS,
-    NULL_INITIAL_ID,
-  )
-  const finalCode = feedbackCode(guessFinal, targetFinal, FINAL_BITS)
-  const pinyinCode = pinyinFeedbackCode(
-    guessInitial,
-    guessFinal,
-    targetInitial,
-    targetFinal,
-  )
-  return initialCode + finalCode * FEEDBACK_BUCKETS
-    + pinyinCode * FEEDBACK_BUCKETS * FEEDBACK_BUCKETS
-}
 
 function jointFeedbackStatistics(
   guessInitial: number,
@@ -1087,6 +810,7 @@ function jointFeedbackStatistics(
     return { entropy: Number.NaN, sampleSize: 0 }
 
   let touchedCount = 0
+  let totalMass = 0
   for (let index = 0; index < particles.initials.length; index++) {
     const code = jointFeedbackCode(
       guessInitial,
@@ -1096,7 +820,9 @@ function jointFeedbackStatistics(
     )
     if (!jointFeedbackCounts[code])
       touchedJointFeedback[touchedCount++] = code
-    jointFeedbackCounts[code]++
+    const mass = particles.weights ? particles.weights[index] : 1
+    jointFeedbackCounts[code] += mass
+    totalMass += mass
   }
 
   let entropy = 0
@@ -1104,7 +830,7 @@ function jointFeedbackStatistics(
   for (let index = 0; index < touchedCount; index++) {
     const code = touchedJointFeedback[index]
     const count = jointFeedbackCounts[code]
-    const probability = count / particles.initials.length
+    const probability = Math.min(1, count / totalMass)
     entropy -= probability * Math.log2(probability)
     if (code === observed)
       observedCount = count
@@ -1118,7 +844,7 @@ function jointFeedbackStatistics(
     sampleSize: particles.initials.length,
     information: observed == null || !observedCount
       ? undefined
-      : -Math.log2(observedCount / particles.initials.length),
+      : -Math.log2(Math.min(1, observedCount / totalMass)),
   }
 }
 
@@ -1183,98 +909,139 @@ export function blendI1Probability(
 }
 
 export interface EvalAnalysis extends EvalBreakdown {
-  playerEI: number
+  playerEI?: number
+  model: 'v3' | 'endgame'
+  initialUnique: number
+  finalUnique: number
+  posteriorProduct: number
+  informationBefore: number
+  informationIsLowerBound: boolean
+  toneWeight: number
+  compression: number
+  candidateCount: number
+  search?: Pick<EndgameSearch, 'status' | 'complete' | 'nodes' | 'candidatesFound' | 'reason'>
+  reason?: string
+  generationMs: number
+  elapsedMs: number
 }
 
-interface V3PlayerAnalysis extends EvalAnalysis {
-  particles: V3Particles
+interface PlayerAnalysis {
+  analysis: EvalAnalysis
+  particles?: EvalParticles
+  tones: Uint32Array
+  v3?: V3Particles
 }
 
-function analyzeV3Internal(
+let endgamePriorCache: EndgamePrior | undefined
+function getEndgamePrior(): EndgamePrior {
+  return endgamePriorCache ||= createEndgamePrior(getSyllableCounts(), new Map<number, number>(
+    ENDGAME_SIGNATURE_KEYS.map((key, index) => [key, ENDGAME_SIGNATURE_WEIGHTS[index]]),
+  ))
+}
+
+export function getPosteriorSizes(state: EvalState): { initialUnique: number; finalUnique: number; posteriorProduct: number } {
+  const initialUnique = new Set(Array.from(state.initialRows, row => getInitialTuples()[row])).size
+  const finalUnique = new Set(Array.from(state.finalRows, row => getFinalTuples()[row])).size
+  return { initialUnique, finalUnique, posteriorProduct: initialUnique * finalUnique }
+}
+
+function analyzeInternal(
   state: EvalState,
   parsedGuess: readonly ParsedChar[],
   results?: readonly MatchResult[],
-): V3PlayerAnalysis | null {
-  const particles = createV3Particles(state)
-  if (!particles)
-    return null
+  budget?: EndgameBudget,
+): PlayerAnalysis {
+  const startedAt = performance.now()
+  const sizes = getPosteriorSizes(state)
+  const informationBefore = combineActualInformation(state.information.i1, state.information.i2)
   const guess = parseParsedTuples(parsedGuess)
-  const observedJointCode = results
-    ? observedCode(parsedGuess, results, 'initial')
-      + observedCode(parsedGuess, results, 'final') * FEEDBACK_BUCKETS
-      + observedCode(parsedGuess, results, 'pinyin') * FEEDBACK_BUCKETS * FEEDBACK_BUCKETS
-    : undefined
-  const base = jointFeedbackStatistics(
-    guess.initial,
-    guess.final,
-    particles,
-    observedJointCode,
-  )
-  const real = observedJointCode == null
-    ? null
-    : realJointFeedbackCount(
-        state,
-        guess.initial,
-        guess.final,
-        observedJointCode,
-      )
-  const i1Details = real && base.observedCount != null
-    ? blendI1Probability(
-        base.observedCount,
-        base.sampleSize,
-        real.hits,
-        real.total,
-      )
-    : null
-  const tone = feedbackStatistics(
-    guess.tone,
-    particles.tones,
-    TONE_BITS,
-    -1,
-    results ? observedCode(parsedGuess, results, 'tone') : undefined,
-  )
-  return {
-    particles,
-    e1: base.entropy,
-    e2: tone.entropy,
-    i1: i1Details ? -Math.log2(i1Details.blendedProbability) : undefined,
-    i2: tone.information,
-    i1Details: i1Details || undefined,
-    playerEI: combineExpectedInformation(base.entropy, tone.entropy),
+  const historySeed = (state.diagnostics?.pinyinHistoryHash ?? SAMPLE_SEED)
+    ^ state.initialHistoryHash ^ state.finalHistoryHash ^ CALIBRATION_SEED
+  const tones = sampleTuples(state.toneRows, getToneTuples(), state.toneHistoryHash ^ historySeed ^ 0x70AE3)
+  const e2 = feedbackEntropy(guess.tone, tones, TONE_BITS)
+  // Actual tone information is exact over the entire posterior, not its sample.
+  let i2: number | undefined
+  if (results && state.toneRows.length) {
+    const code = observedCode(parsedGuess, results, 'tone')
+    let hits = 0
+    for (const row of state.toneRows) {
+      if (feedbackCode(guess.tone, getToneTuples()[row], TONE_BITS) === code) hits++
+    }
+    if (hits) i2 = -Math.log2(hits / state.toneRows.length)
   }
+
+  const analysis: EvalAnalysis = {
+    ...sizes,
+    model: sizes.posteriorProduct <= ENDGAME_PRODUCT_LIMIT ? 'endgame' : 'v3',
+    informationBefore,
+    informationIsLowerBound: !!(state.information.missingI1 || state.information.missingI2),
+    toneWeight: toneWeightForInformation(informationBefore),
+    compression: compressionForInformation(informationBefore, sizes.posteriorProduct),
+    candidateCount: 0, e2, i2, generationMs: 0, elapsedMs: 0,
+  }
+  let particles: EvalParticles | undefined
+  let v3: V3Particles | undefined
+  if (analysis.model === 'endgame') {
+    const search = enumerateEndgame(state.history, getEndgamePrior(), budget)
+    analysis.search = { status: search.status, complete: search.complete, nodes: search.nodes,
+      candidatesFound: search.candidatesFound, reason: search.reason }
+    if (search.status === 'complete') particles = search
+    else analysis.reason = search.reason
+  }
+  else {
+    v3 = createV3Particles(state) || undefined
+    particles = v3
+    if (!particles) analysis.reason = '声韵联合后验不可用，本猜不评价'
+  }
+  analysis.generationMs = performance.now() - startedAt
+  if (particles && particles.initials.length && Number.isFinite(e2)) {
+    analysis.candidateCount = particles.initials.length
+    const observed = results
+      ? observedCode(parsedGuess, results, 'initial')
+        + observedCode(parsedGuess, results, 'final') * FEEDBACK_BUCKETS
+        + observedCode(parsedGuess, results, 'pinyin') * FEEDBACK_BUCKETS ** 2
+      : undefined
+    const base = jointFeedbackStatistics(guess.initial, guess.final, particles, observed)
+    analysis.e1 = base.entropy
+    analysis.playerEI = combineExpectedInformation(base.entropy, e2, analysis.toneWeight)
+    if (analysis.model === 'endgame') {
+      analysis.i1 = base.information
+    }
+    else if (observed != null) {
+      const real = realJointFeedbackCount(state, guess.initial, guess.final, observed)
+      const details = real && base.observedCount != null
+        ? blendI1Probability(base.observedCount, base.sampleSize, real.hits, real.total)
+        : null
+      analysis.i1Details = details || undefined
+      analysis.i1 = details ? -Math.log2(details.blendedProbability) : undefined
+    }
+  }
+  else if (!analysis.reason) {
+    analysis.reason = '声调后验为空，本猜不评价'
+  }
+  analysis.elapsedMs = performance.now() - startedAt
+  return { analysis, particles, tones, v3 }
 }
 
-/** Score one observed guess without ranking it against the 1000 benchmark words. */
-export function analyzeV3(
+/** Reconstruct actual information without redoing the 1000-word ranking. */
+export function analyzeGuess(
   state: EvalState,
   parsedGuess: readonly ParsedChar[],
   results: readonly MatchResult[],
-): EvalAnalysis | null {
-  const analysis = analyzeV3Internal(state, parsedGuess, results)
-  if (!analysis)
-    return null
-  return {
-    playerEI: analysis.playerEI,
-    e1: analysis.e1,
-    e2: analysis.e2,
-    i1: analysis.i1,
-    i2: analysis.i2,
-    i1Details: analysis.i1Details,
-  }
+  budget?: EndgameBudget,
+): EvalAnalysis {
+  return analyzeInternal(state, parsedGuess, results, budget).analysis
 }
 
-/** Official V3 score: calibrated initial/final/pinyin particles plus independent tone entropy. */
-export function evaluate(
+function rankAnalysis(
   state: EvalState,
-  parsedGuess: readonly ParsedChar[],
-  includeDebug = false,
-  results?: readonly MatchResult[],
+  context: PlayerAnalysis,
+  includeDebug: boolean,
 ): EvalResult | null {
-  const startedAt = performance.now()
-  const analysis = analyzeV3Internal(state, parsedGuess, results)
-  if (!analysis)
+  const { analysis, particles, tones, v3 } = context
+  const { e1, playerEI } = analysis
+  if (!particles || e1 == null || playerEI == null || !Number.isFinite(playerEI))
     return null
-  const { particles, e1, e2, i1, i2, i1Details, playerEI } = analysis
 
   const rankingStartedAt = performance.now()
   const sampledInitials = getSampledInitials()
@@ -1283,59 +1050,64 @@ export function evaluate(
   const entries: EvalDebugEntry[] | undefined = includeDebug ? [] : undefined
   let lowerCount = 0
   for (let index = 0; index < SAMPLE_SIZE; index++) {
-    const benchmarkE1 = jointFeedbackEntropy(
-      sampledInitials[index],
-      sampledFinals[index],
-      particles,
-    )
-    const benchmarkE2 = feedbackEntropy(sampledTones[index], particles.tones, TONE_BITS)
-    const entropy = combineExpectedInformation(benchmarkE1, benchmarkE2)
-    if (entropy < playerEI)
-      lowerCount++
-    entries?.push({
-      word: SAMPLED_WORDS[index],
-      ei: entropy,
-      e1: benchmarkE1,
-      e2: benchmarkE2,
-    })
+    const benchmarkE1 = jointFeedbackEntropy(sampledInitials[index], sampledFinals[index], particles)
+    const benchmarkE2 = feedbackEntropy(sampledTones[index], tones, TONE_BITS)
+    const entropy = combineExpectedInformation(benchmarkE1, benchmarkE2, analysis.toneWeight)
+    if (entropy < playerEI) lowerCount++
+    entries?.push({ word: SAMPLED_WORDS[index], ei: entropy, e1: benchmarkE1, e2: benchmarkE2 })
   }
   entries?.sort((left, right) => right.ei - left.ei)
   const rankingMs = performance.now() - rankingStartedAt
-
+  const rawPercentile = lowerCount / SAMPLE_SIZE
+  const percentile = compressPercentile(rawPercentile, analysis.compression)
   return {
-    playerEI,
-    e1,
-    e2,
-    i1,
-    i2,
-    i1Details,
-    rating: ratingFromPercentile(lowerCount / SAMPLE_SIZE),
-    rank: lowerCount,
-    total: SAMPLE_SIZE,
+    ...analysis, e1, playerEI, rawPercentile, percentile,
+    rating: ratingFromPercentile(percentile), rank: lowerCount, total: SAMPLE_SIZE,
     initialPosterior: state.initialRows.length,
     finalPosterior: state.finalRows.length,
     tonePosterior: state.toneRows.length,
     initialParticles: particles.initials.length,
     finalParticles: particles.finals.length,
-    toneParticles: particles.tones.length,
-    effectiveHypotheses: particles.effectiveHypotheses,
-    lambda: particles.lambda,
-    realParticles: particles.realCount,
-    virtualParticles: particles.virtualCount,
-    attempts: particles.attempts,
-    accepted: particles.accepted,
-    acceptanceRate: particles.attempts ? particles.accepted / particles.attempts : 0,
-    invalidSyllableRejected: particles.invalidSyllableRejected,
-    pinyinHistoryRejected: particles.pinyinHistoryRejected,
-    clippedSignatureCount: particles.clippedSignatureCount,
-    candidateEffective: particles.candidateEffective,
-    resampledEffective: particles.resampledEffective,
-    fallback: particles.fallback,
-    generationMs: particles.generationMs,
-    rankingMs,
-    elapsedMs: performance.now() - startedAt,
-    sampled: entries,
+    toneParticles: tones.length,
+    effectiveHypotheses: v3?.effectiveHypotheses ?? 0,
+    lambda: v3?.lambda ?? 0,
+    realParticles: v3?.realCount ?? 0,
+    virtualParticles: v3?.virtualCount ?? 0,
+    attempts: v3?.attempts ?? 0,
+    accepted: v3?.accepted ?? 0,
+    acceptanceRate: v3?.attempts ? v3.accepted / v3.attempts : 0,
+    invalidSyllableRejected: v3?.invalidSyllableRejected ?? 0,
+    pinyinHistoryRejected: v3?.pinyinHistoryRejected ?? 0,
+    clippedSignatureCount: v3?.clippedSignatureCount ?? 0,
+    candidateEffective: v3?.candidateEffective ?? 0,
+    resampledEffective: v3?.resampledEffective ?? 0,
+    fallback: v3?.fallback ?? false,
+    rankingMs, elapsedMs: analysis.elapsedMs + rankingMs, sampled: entries,
   }
+}
+
+/** Pure pre-guess score: actual feedback affects I only, never this guess's E/rank. */
+export function evaluate(
+  state: EvalState,
+  parsedGuess: readonly ParsedChar[],
+  includeDebug = false,
+  results?: readonly MatchResult[],
+  budget?: EndgameBudget,
+): EvalResult | null {
+  return rankAnalysis(state, analyzeInternal(state, parsedGuess, results, budget), includeDebug)
+}
+
+/** Single session step shared by live play and replay, including paused searches. */
+export function advanceEvaluation(
+  state: EvalState,
+  parsedGuess: readonly ParsedChar[],
+  results: readonly MatchResult[],
+  options: { rank?: boolean; includeDebug?: boolean; budget?: EndgameBudget } = {},
+): { analysis: EvalAnalysis; result: EvalResult | null; valid: boolean } {
+  const context = analyzeInternal(state, parsedGuess, results, options.budget)
+  const result = options.rank === false ? null : rankAnalysis(state, context, !!options.includeDebug)
+  const valid = updateState(state, parsedGuess, results, context.analysis)
+  return { analysis: context.analysis, result, valid }
 }
 
 function filterRows(
@@ -1397,14 +1169,18 @@ export function updateState(
   state: EvalState,
   parsedGuess: readonly ParsedChar[],
   results: readonly MatchResult[],
+  analysis = analyzeGuess(state, parsedGuess, results),
 ): boolean {
   const guess = parseParsedTuples(parsedGuess)
   const initialCode = observedCode(parsedGuess, results, 'initial')
   const finalCode = observedCode(parsedGuess, results, 'final')
   const toneCode = observedCode(parsedGuess, results, 'tone')
-  const pinyinCode = state.diagnostics
-    ? observedCode(parsedGuess, results, 'pinyin')
-    : undefined
+  const pinyinCode = observedCode(parsedGuess, results, 'pinyin')
+  state.history.push({ guessInitial: guess.initial, guessFinal: guess.final, initialCode, finalCode, code: pinyinCode })
+  if (analysis.i1 != null && Number.isFinite(analysis.i1)) state.information.i1 += analysis.i1
+  else state.information.missingI1++
+  if (analysis.i2 != null && Number.isFinite(analysis.i2)) state.information.i2 += analysis.i2
+  else state.information.missingI2++
 
   state.initialRows = filterRows(
     state.initialRows,
@@ -1471,6 +1247,8 @@ export function updateState(
 
 // Test helpers also ensure generator/runtime parsing stays aligned.
 export const evalTesting = {
+  getEndgamePrior,
+  jointFeedbackStatistics,
   parseWordTuples,
   parseParsedTuples,
   packTuple,

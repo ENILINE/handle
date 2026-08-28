@@ -256,109 +256,109 @@ watchEffect(() => {
 
         <!-- Eval debug -->
         <template v-if="evalDebugTrace.length">
-          <div mt-6 mb-2 op50>
-            联合后验轨迹
-          </div>
+          <div mt-6 mb-2 op50>联合后验与评价轨迹</div>
           <div w-full max-w-220 text-xs text-left flex="~ col gap-2">
-            <div
-              v-for="entry of evalDebugTrace"
-              :key="`${entry.guess}-${entry.word}`"
-              border="1 base rounded" p2
-            >
-              <div flex="~ wrap gap-x-3 gap-y-1">
-                <b>#{{ entry.guess }} {{ entry.word }}</b>
-                <span>I {{ entry.after.initialRows }} 行 / {{ entry.after.initialUnique }} 种 / 有效 {{ entry.after.initialEffective.toFixed(1) }}</span>
-                <span>F {{ entry.after.finalRows }} 行 / {{ entry.after.finalUnique }} 种 / 有效 {{ entry.after.finalEffective.toFixed(1) }}</span>
-                <span>T {{ entry.after.toneRows }} 行 / {{ entry.after.toneUnique }} 种 / 有效 {{ entry.after.toneEffective.toFixed(1) }}</span>
+            <div v-for="entry of evalDebugTrace" :key="`${entry.guess}-${entry.word}`" border="1 base rounded" p2>
+              <b>#{{ entry.guess }} {{ entry.word }}</b>
+              <div mt1 flex="~ wrap gap-x-3 gap-y-1">
+                <span>猜后声母 {{ entry.after.initialRows }} 行 / {{ entry.after.initialUnique }} 种</span>
+                <span>韵母 {{ entry.after.finalRows }} 行 / {{ entry.after.finalUnique }} 种</span>
+                <span>声调 {{ entry.after.toneRows }} 行 / {{ entry.after.toneUnique }} 种</span>
+                <span>IF {{ entry.after.ifRows }} / IF+PY {{ entry.after.ifPyRows }}</span>
+                <span>不同全拼 {{ entry.after.ifPyUnique }} / 有效 {{ entry.after.ifPyEffective.toFixed(1) }}</span>
               </div>
-              <div flex="~ wrap gap-x-3 gap-y-1" mt1>
-                <span>IF {{ entry.after.ifRows }} 行 / {{ entry.after.ifUnique }} 种 / 有效 {{ entry.after.ifEffective.toFixed(1) }}</span>
-                <span>IF+PY {{ entry.after.ifPyRows }} 行 / {{ entry.after.ifPyUnique }} 种 / 有效 {{ entry.after.ifPyEffective.toFixed(1) }}</span>
+              <div mt1 op60>
+                保留 I/F/T/IF/IF+PY：
+                {{ (entry.initialRetained * 100).toFixed(1) }}% /
+                {{ (entry.finalRetained * 100).toFixed(1) }}% /
+                {{ (entry.toneRetained * 100).toFixed(1) }}% /
+                {{ (entry.ifRetained * 100).toFixed(1) }}% /
+                {{ (entry.ifPyRetained * 100).toFixed(1) }}%
               </div>
-              <div flex="~ wrap gap-x-3 gap-y-1" mt1 op60>
-                <span>保留 I {{ (entry.initialRetained * 100).toFixed(1) }}%</span>
-                <span>F {{ (entry.finalRetained * 100).toFixed(1) }}%</span>
-                <span>T {{ (entry.toneRetained * 100).toFixed(1) }}%</span>
-                <span>IF {{ (entry.ifRetained * 100).toFixed(1) }}%</span>
-                <span>IF+PY {{ (entry.ifPyRetained * 100).toFixed(1) }}%</span>
-                <span>{{ entry.elapsedMs.toFixed(1) }} ms</span>
+              <template v-if="entry.analysis">
+                <div mt1>
+                  猜前 N_I × N_F = {{ entry.analysis.initialUnique }} × {{ entry.analysis.finalUnique }}
+                  = {{ entry.analysis.posteriorProduct }}；
+                  {{ entry.analysis.model === 'endgame' ? '末盘完整加权后验' : 'V3 混合粒子' }}
+                  / {{ entry.analysis.candidateCount }} 个候选
+                </div>
+                <div v-if="entry.analysis.search" mt1>
+                  搜索 {{ entry.analysis.search.status }} /
+                  {{ entry.analysis.search.nodes }} 节点 /
+                  找到 {{ entry.analysis.search.candidatesFound }} 个候选 /
+                  {{ entry.analysis.search.complete ? '完整结束' : '未完成，不使用部分候选' }}
+                </div>
+                <div v-if="entry.analysis.reason" mt1 text-red>{{ entry.analysis.reason }}</div>
+                <div mt1>
+                  猜前 J{{ entry.analysis.informationIsLowerBound ? '≥' : '=' }}{{ entry.analysis.informationBefore.toFixed(3) }}；
+                  w={{ entry.analysis.toneWeight.toFixed(4) }}；
+                  压缩系数 t={{ entry.analysis.compression.toFixed(4) }}
+                </div>
+                <div mt1 flex="~ wrap gap-x-3 gap-y-1">
+                  <span>E1={{ entry.analysis.e1?.toFixed(3) ?? '无结果' }}</span>
+                  <span>E2={{ entry.analysis.e2.toFixed(3) }}</span>
+                  <span>E={{ entry.analysis.playerEI?.toFixed(3) ?? '无结果' }}</span>
+                  <span>I1={{ entry.analysis.i1?.toFixed(3) ?? '未知' }}</span>
+                  <span>I2={{ entry.analysis.i2?.toFixed(3) ?? '未知' }}</span>
+                </div>
+                <div mt1 op60>
+                  累计 I1{{ entry.missingI1 ? '≥' : '=' }}{{ entry.cumulativeI1.toFixed(3) }}；
+                  I2{{ entry.missingI2 ? '≥' : '=' }}{{ entry.cumulativeI2.toFixed(3) }}；
+                  I{{ entry.missingI1 || entry.missingI2 ? '≥' : '=' }}{{ (entry.cumulativeI1 + entry.cumulativeI2).toFixed(3) }}
+                  <span v-if="entry.missingI1 || entry.missingI2">（下界，缺失 {{ entry.missingI1 }} 次 I1 / {{ entry.missingI2 }} 次 I2）</span>
+                </div>
+                <div v-if="entry.analysis.i1Details" mt1 op60>
+                  I1 粒子命中 {{ entry.analysis.i1Details.particleHits }}/{{ entry.analysis.i1Details.particleTotal }}，
+                  真实后验命中 {{ entry.analysis.i1Details.realHits }}/{{ entry.analysis.i1Details.realTotal }}，
+                  粒子权重 α={{ entry.analysis.i1Details.particleWeight.toFixed(3) }}，
+                  p混合={{ entry.analysis.i1Details.blendedProbability.toExponential(3) }}
+                </div>
+              </template>
+              <div v-if="entry.result" mt1>
+                超过 {{ entry.result.rank }}/{{ entry.result.total }}；
+                原始 {{ (entry.result.rawPercentile * 100).toFixed(3) }}% →
+                最终 {{ (entry.result.percentile * 100).toFixed(3) }}%；
+                {{ entry.result.rating }}
               </div>
-              <div v-if="entry.v2 && entry.v3" mt1 flex="~ wrap gap-x-3 gap-y-1">
-                <span>V2 E={{ entry.v2.playerEI.toFixed(3) }}（E1={{ entry.v2.e1.toFixed(3) }}, E2={{ entry.v2.e2.toFixed(3) }}）/ {{ entry.v2.rating }} / {{ entry.v2.rank }}名</span>
-                <span>V3 E={{ entry.v3.playerEI.toFixed(3) }}（E1={{ entry.v3.e1.toFixed(3) }}, E2={{ entry.v3.e2.toFixed(3) }}）/ {{ entry.v3.rating }} / {{ entry.v3.rank }}名</span>
-                <span>排名差 {{ entry.v3.rank - entry.v2.rank >= 0 ? '+' : '' }}{{ entry.v3.rank - entry.v2.rank }}</span>
+              <div v-if="entry.result?.model === 'v3'" mt1 op60>
+                混合 λ={{ entry.result.lambda.toFixed(4) }}（有效假设 {{ entry.result.effectiveHypotheses.toFixed(1) }}）；
+                真实/虚拟 {{ entry.result.realParticles }}/{{ entry.result.virtualParticles }}；
+                接受 {{ entry.result.accepted }}/{{ entry.result.attempts }}
+                （{{ (entry.result.acceptanceRate * 100).toFixed(1) }}%）；
+                ESS {{ entry.result.candidateEffective.toFixed(1) }} → {{ entry.result.resampledEffective.toFixed(1) }}；
+                非法音节/历史淘汰 {{ entry.result.invalidSyllableRejected }}/{{ entry.result.pinyinHistoryRejected }}；
+                结构截断 {{ entry.result.clippedSignatureCount }}
+                <span v-if="entry.result.fallback" text-red>虚拟粒子生成失败，V3 使用真实后验</span>
               </div>
-              <div v-if="entry.analysis" mt1 flex="~ wrap gap-x-3 gap-y-1">
-                <span>本猜 E1={{ entry.analysis.e1.toFixed(3) }}</span>
-                <span>E2={{ entry.analysis.e2.toFixed(3) }}</span>
-                <span>E={{ entry.analysis.playerEI.toFixed(3) }}</span>
-                <span>I1={{ entry.analysis.i1?.toFixed(3) ?? '无结果' }}</span>
-                <span>I2={{ entry.analysis.i2?.toFixed(3) ?? '无结果' }}</span>
-                <span>I={{ entry.analysis.i1 != null && entry.analysis.i2 != null ? (entry.analysis.i1 + entry.analysis.i2).toFixed(3) : '无结果' }}</span>
+              <div mt1 op60>
+                生成 {{ entry.analysis?.generationMs.toFixed(1) ?? '—' }} ms；
+                排名 {{ entry.result?.rankingMs.toFixed(1) ?? '跳过' }} ms；
+                总耗时 {{ entry.elapsedMs.toFixed(1) }} ms
               </div>
-              <div v-if="entry.analysis" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
-                <span>累计 I1={{ entry.cumulativeI1.toFixed(3) }}</span>
-                <span>累计 I2={{ entry.cumulativeI2.toFixed(3) }}</span>
-                <span>累计 I={{ (entry.cumulativeI1 + entry.cumulativeI2).toFixed(3) }}</span>
+              <div v-if="entry.after.degradation === 'corpus-saturated'" mt1 text-ok>
+                词库后验饱和（不代表逻辑上已无未知信息）
               </div>
-              <div v-if="entry.analysis?.i1Details" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
-                <span>I1 粒子命中 {{ entry.analysis.i1Details.particleHits }}/{{ entry.analysis.i1Details.particleTotal }}</span>
-                <span>p粒子={{ entry.analysis.i1Details.particleProbability.toExponential(3) }}</span>
-                <span>真实后验命中 {{ entry.analysis.i1Details.realHits }}/{{ entry.analysis.i1Details.realTotal }}</span>
-                <span>p真实={{ entry.analysis.i1Details.realProbability.toExponential(3) }}</span>
-                <span>粒子权重 α={{ entry.analysis.i1Details.particleWeight.toFixed(3) }}</span>
-                <span>p混合={{ entry.analysis.i1Details.blendedProbability.toExponential(3) }}</span>
-              </div>
-              <div v-if="entry.v3" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
-                <span>混合 λ={{ entry.v3.lambda.toFixed(4) }}（有效假设 {{ entry.v3.effectiveHypotheses.toFixed(1) }}）</span>
-                <span>真实/虚拟 {{ entry.v3.realParticles }}/{{ entry.v3.virtualParticles }}</span>
-                <span>候选 {{ entry.v3.accepted }}/{{ entry.v3.attempts }}（{{ (entry.v3.acceptanceRate * 100).toFixed(1) }}%）</span>
-                <span>ESS {{ entry.v3.candidateEffective.toFixed(1) }} → {{ entry.v3.resampledEffective.toFixed(1) }}</span>
-              </div>
-              <div v-if="entry.v3" mt1 op60 flex="~ wrap gap-x-3 gap-y-1">
-                <span>非法音节淘汰 {{ entry.v3.invalidSyllableRejected }}</span>
-                <span>全拼历史淘汰 {{ entry.v3.pinyinHistoryRejected }}</span>
-                <span>结构权重截断 {{ entry.v3.clippedSignatureCount }}</span>
-                <span>生成 {{ entry.v3.generationMs.toFixed(1) }} ms</span>
-                <span>排名 {{ entry.v3.rankingMs.toFixed(1) }} ms</span>
-                <span>V3 总计 {{ entry.v3.elapsedMs.toFixed(1) }} ms</span>
-                <span v-if="entry.v3.fallback" text-red>虚拟粒子失败，已回退真实后验</span>
-              </div>
-              <div v-if="entry.after.degradation === 'true-saturation'" mt1 text-ok>
-                真实饱和：IF+PY 只剩一种拼音，I/F 有效假设数均不超过 8
-              </div>
-              <div v-else-if="entry.after.degradation === 'corpus-sparse'" mt1 text-mis>
-                词库稀疏：IF+PY 只剩一种拼音，但 I/F 至少一项仍有超过 8 个有效假设
-              </div>
-              <div v-else-if="entry.after.degradation === 'invalid'" mt1 text-red>
-                异常：联合后验为空
-              </div>
+              <div v-else-if="entry.after.degradation === 'corpus-sparse'" mt1 text-orange>词库稀疏</div>
+              <div v-else-if="entry.after.degradation === 'invalid'" mt1 text-red>词库联合后验为空</div>
             </div>
           </div>
         </template>
 
         <template v-if="lastEvalDebug">
-          <div mt-6 mb-2 op50>
-            评价调试
-          </div>
+          <div mt-6 mb-2 op50>1000 词基准排名</div>
           <div text-sm>
-            本次总期望信息 E: {{ lastEvalDebug.playerEI.toFixed(3) }}
-            （E1={{ lastEvalDebug.e1.toFixed(3) }}, E2={{ lastEvalDebug.e2.toFixed(3) }}）
-            | 评价: {{ lastEvalDebug.rating }}
-            | 超过: {{ lastEvalDebug.rank }} / {{ lastEvalDebug.total }}
-            ({{ (lastEvalDebug.rank / lastEvalDebug.total * 100).toFixed(1) }}%)
-          </div>
-          <div text-xs op50>
-            后验: 声母 {{ lastEvalDebug.initialPosterior }} / 韵母 {{ lastEvalDebug.finalPosterior }} / 声调 {{ lastEvalDebug.tonePosterior }}
-            | 粒子: 声母 {{ lastEvalDebug.initialParticles }} / 韵母 {{ lastEvalDebug.finalParticles }} / 声调 {{ lastEvalDebug.toneParticles }}
-            | 耗时: {{ lastEvalDebug.elapsedMs.toFixed(1) }} ms
+            {{ lastEvalDebug.model === 'endgame' ? '末盘' : 'V3' }} E={{ lastEvalDebug.playerEI.toFixed(3) }}
+            （E1={{ lastEvalDebug.e1.toFixed(3) }} + {{ lastEvalDebug.toneWeight.toFixed(3) }} × E2={{ lastEvalDebug.e2.toFixed(3) }}）
+            | {{ lastEvalDebug.rating }}
+            | 超过 {{ lastEvalDebug.rank }}/{{ lastEvalDebug.total }}
+            | {{ (lastEvalDebug.rawPercentile * 100).toFixed(3) }}% → {{ (lastEvalDebug.percentile * 100).toFixed(3) }}%
           </div>
           <div v-if="lastEvalDebug.sampled" mt-2 text-xs op50 max-h-100 overflow-auto w-full max-w-200>
             <div v-for="(entry, idx) of lastEvalDebug.sampled" :key="idx" flex gap-2>
               <span>{{ idx + 1 }}.</span>
               <span>{{ entry.word }}</span>
-              <span op50>{{ entry.ei.toFixed(3) }}</span>
-              <span op50>(E1 {{ entry.e1.toFixed(3) }} + E2 {{ entry.e2.toFixed(3) }})</span>
+              <span>{{ entry.ei.toFixed(3) }}</span>
+              <span op50>(E1 {{ entry.e1.toFixed(3) }} + {{ lastEvalDebug.toneWeight.toFixed(3) }} × E2 {{ entry.e2.toFixed(3) }})</span>
               <span v-if="entry.ei < lastEvalDebug.playerEI" text-ok>◀</span>
             </div>
           </div>

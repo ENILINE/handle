@@ -6,8 +6,8 @@ import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
-import { EVAL_VERSION, analyzeV3, canAppendEvaluation, canReuseRatings, createEvalState, evaluate, evaluateV2, getEvalDiagnosticSnapshot, updateState } from './logic/eval'
-import type { EvalAnalysis, EvalDiagnosticSnapshot, EvalResult, EvalState, V2EvalResult } from './logic/eval'
+import { EVAL_VERSION, advanceEvaluation, canAppendEvaluation, canReuseRatings, createEvalState, getEvalDiagnosticSnapshot } from './logic/eval'
+import type { EvalAnalysis, EvalDiagnosticSnapshot, EvalResult, EvalState } from './logic/eval'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -69,7 +69,7 @@ export const useNumberTone = computed(() => {
 })
 
 const params = new URLSearchParams(window.location.search)
-export const isDev = !!import.meta.hot || params.get('dev') === 'hey'
+export const isDev = import.meta.env.DEV || params.get('dev') === 'hey'
 export const daySince = useDebounce(computed(() => {
   // Adjust date for daylight saving time, assuming START_DATE is not in DST
   const adjustedNow = isDstObserved(now.value) ? new Date(+now.value + 3600000) : now.value
@@ -219,10 +219,11 @@ export interface EvalDebugTraceEntry {
   ifPyRetained: number
   elapsedMs: number
   analysis?: EvalAnalysis
-  v2?: V2EvalResult
-  v3?: EvalResult
+  result?: EvalResult
   cumulativeI1: number
   cumulativeI2: number
+  missingI1: number
+  missingI2: number
 }
 
 export const evalState = ref<EvalState>(createEvalState({ diagnostics: true }))
@@ -240,26 +241,21 @@ const evalGameKey = computed(() => {
 
 let evaluatedGameKey = ''
 let evaluatedWords: string[] = []
-let cumulativeEvalI1 = 0
-let cumulativeEvalI2 = 0
 
 function evaluateAndApply(
   state: EvalState,
   word: string,
   shouldEvaluate: boolean,
   includeDebug: boolean,
-  shouldEvaluateV2 = false,
-  shouldAnalyze = isDev,
 ): EvalResult | null {
   try {
     const startedAt = performance.now()
     const diagnosticsBefore = isDev ? getEvalDiagnosticSnapshot(state) : null
     const parsed = parseWord(word)
     const feedback = testAnswer(parsed)
-    const result = shouldEvaluate ? evaluate(state, parsed, includeDebug, feedback) : null
-    const analysis = result || (shouldAnalyze ? analyzeV3(state, parsed, feedback) : null)
-    const v2 = shouldEvaluateV2 ? evaluateV2(state, parsed, false, feedback) : null
-    const valid = updateState(state, parsed, feedback)
+    const { result, analysis, valid } = advanceEvaluation(state, parsed, feedback, {
+      rank: shouldEvaluate, includeDebug,
+    })
     const diagnosticsAfter = isDev ? getEvalDiagnosticSnapshot(state) : null
     const elapsedMs = performance.now() - startedAt
     if (result) {
@@ -267,10 +263,6 @@ function evaluateAndApply(
       result.finalPosterior = state.finalRows.length
       result.tonePosterior = state.toneRows.length
     }
-    if (analysis?.i1 != null)
-      cumulativeEvalI1 += analysis.i1
-    if (analysis?.i2 != null)
-      cumulativeEvalI2 += analysis.i2
     if (diagnosticsBefore && diagnosticsAfter) {
       const retained = (after: number, before: number) => before ? after / before : 0
       evalDebugTrace.value.push({
@@ -285,12 +277,15 @@ function evaluateAndApply(
         ifPyRetained: retained(diagnosticsAfter.ifPyRows, diagnosticsBefore.ifPyRows),
         elapsedMs,
         analysis: analysis || undefined,
-        v2: v2 || undefined,
-        v3: result || undefined,
-        cumulativeI1: cumulativeEvalI1,
-        cumulativeI2: cumulativeEvalI2,
+        result: result || undefined,
+        cumulativeI1: state.information.i1,
+        cumulativeI2: state.information.i2,
+        missingI1: state.information.missingI1,
+        missingI2: state.information.missingI2,
       })
     }
+    if (analysis.reason && isDev)
+      console.warn('[evaluation] guess paused', { word, reason: analysis.reason })
     if (!valid && isDev)
       console.warn('[evaluation] posterior became empty', { word, feedback })
     else if (diagnosticsAfter?.degradation === 'invalid' && isDev)
@@ -305,9 +300,9 @@ function evaluateAndApply(
   }
 }
 
-function rebuildEvaluation(words: readonly string[]): void {
+function rebuildEvaluation(words: readonly string[], replacedHistory = false): void {
   const state = createEvalState({ diagnostics: true })
-  const storedRatingsAreCurrent = canReuseRatings(
+  const storedRatingsAreCurrent = !replacedHistory && canReuseRatings(
     meta.value.ratingsVersion,
     meta.value.ratings?.length,
     words.length,
@@ -318,8 +313,6 @@ function rebuildEvaluation(words: readonly string[]): void {
 
   lastEvalDebug.value = null
   evalDebugTrace.value = []
-  cumulativeEvalI1 = 0
-  cumulativeEvalI2 = 0
   for (let index = 0; index < words.length; index++) {
     const shouldEvaluate = !storedRatingsAreCurrent || (isDev && index === words.length - 1)
     const result = evaluateAndApply(
@@ -327,8 +320,6 @@ function rebuildEvaluation(words: readonly string[]): void {
       words[index],
       shouldEvaluate,
       isDev && index === words.length - 1,
-      isDev && index === words.length - 1,
-      isDev,
     )
     if (!storedRatingsAreCurrent)
       ratings[index] = result?.rating ?? null
@@ -349,7 +340,7 @@ function appendEvaluations(words: readonly string[]): void {
     : []
 
   for (let index = evaluatedWords.length; index < words.length; index++) {
-    const result = evaluateAndApply(evalState.value, words[index], true, isDev, isDev, isDev)
+    const result = evaluateAndApply(evalState.value, words[index], true, isDev)
     ratings[index] = result?.rating ?? null
     if (isDev)
       lastEvalDebug.value = result
@@ -368,10 +359,12 @@ watch(
     if (canAppend)
       appendEvaluations(words)
     else if (gameKey !== evaluatedGameKey || words.join('\u0000') !== evaluatedWords.join('\u0000'))
-      rebuildEvaluation(words)
+      rebuildEvaluation(words, gameKey === evaluatedGameKey)
 
     evaluatedGameKey = gameKey
     evaluatedWords = words
   },
-  { immediate: true, flush: 'sync' },
+  // Mode, answer and storage switch together within a tick. Do not score an
+  // intermediate combination (new answer + previous mode's guesses/ratings).
+  { immediate: true, flush: 'post' },
 )

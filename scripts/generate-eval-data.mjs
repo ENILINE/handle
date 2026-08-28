@@ -25,6 +25,7 @@ const SAMPLE_SIZE = 1000
 const SAMPLE_SEED = 42
 const CALIBRATION_PAIRINGS = 1_000_000
 const CALIBRATION_SEED = 0x56330001
+const ENDGAME_CALIBRATION_SEED = 0x56340001
 const SIGNATURE_WEIGHT_MIN = 1 / 16
 const SIGNATURE_WEIGHT_MAX = 16
 
@@ -195,6 +196,57 @@ const signatureWeights = signatureKeys.map((signature) => {
   return Math.max(SIGNATURE_WEIGHT_MIN, Math.min(SIGNATURE_WEIGHT_MAX, raw))
 })
 
+// Endgame starts from iid syllables, NOT re-paired corpus tuples. Pool position
+// permutations of each signature so the correction cannot add position priors.
+const orbitCache = new Map()
+function signatureOrbit(signature) {
+  if (orbitCache.has(signature)) return orbitCache.get(signature)
+  const patterns = [0, 8, 16].map(shift =>
+    Array.from({ length: 4 }, (_, p) => signature >>> (shift + p * 2) & 3))
+  let key = Infinity
+  for (let a = 0; a < 4; a++) {
+    for (let b = 0; b < 4; b++) {
+      if (b === a) continue
+      for (let c = 0; c < 4; c++) {
+        if (c === a || c === b) continue
+        const order = [a, b, c, 6 - a - b - c]
+        const code = patterns.reduce((value, pattern, dim) =>
+          value | equalityPattern(order.map(p => pattern[p])) << (dim * 8), 0)
+        key = Math.min(key, code)
+      }
+    }
+  }
+  orbitCache.set(signature, key)
+  return key
+}
+
+const endgameReal = new Map()
+for (const [signature, count] of realSignatureCounts) {
+  const key = signatureOrbit(signature)
+  endgameReal.set(key, (endgameReal.get(key) || 0) + count)
+}
+// Sampling uniformly from the slot list is exactly sampling from q(s).
+const slots = []
+for (let pair = 0; pair < syllableCounts.length; pair++) {
+  for (let n = 0; n < syllableCounts[pair]; n++) slots.push(pair)
+}
+const endgameRandom = mulberry32(ENDGAME_CALIBRATION_SEED)
+const endgameBase = new Map()
+for (let iteration = 0; iteration < CALIBRATION_PAIRINGS; iteration++) {
+  const pairs = Array.from({ length: 4 }, () => slots[Math.floor(endgameRandom() * slotCount)])
+  const key = signatureOrbit(structureSignature(
+    pairs.map(pair => Math.floor(pair / FINALS.length)),
+    pairs.map(pair => pair % FINALS.length),
+  ))
+  endgameBase.set(key, (endgameBase.get(key) || 0) + 1)
+}
+const endgameKeys = [...new Set([...endgameReal.keys(), ...endgameBase.keys()])].sort((a, b) => a - b)
+const endgameWeights = endgameKeys.map((key) => {
+  const real = ((endgameReal.get(key) || 0) + 1) / rows.length
+  const base = ((endgameBase.get(key) || 0) + 1) / CALIBRATION_PAIRINGS
+  return Math.max(SIGNATURE_WEIGHT_MIN, Math.min(SIGNATURE_WEIGHT_MAX, real / base))
+})
+
 const random = mulberry32(SAMPLE_SEED)
 const indices = Array.from({ length: rows.length }, (_, index) => index)
 for (let index = 0; index < SAMPLE_SIZE; index++) {
@@ -237,6 +289,9 @@ export const INITIAL_SLOT_COUNTS_BASE64 = '${encodeUint32(initialCounts)}'
 export const FINAL_SLOT_COUNTS_BASE64 = '${encodeUint32(finalCounts)}'
 export const STRUCTURE_SIGNATURE_KEYS = ${JSON.stringify(signatureKeys)} as const
 export const STRUCTURE_SIGNATURE_WEIGHTS = ${JSON.stringify(signatureWeights.map(value => Number(value.toFixed(8))))} as const
+export const ENDGAME_CALIBRATION_SEED = ${ENDGAME_CALIBRATION_SEED}
+export const ENDGAME_SIGNATURE_KEYS = ${JSON.stringify(endgameKeys)} as const
+export const ENDGAME_SIGNATURE_WEIGHTS = ${JSON.stringify(endgameWeights)} as const
 export const SAMPLED_INITIALS_BASE64 = '${encodeUint32(sampledInitials)}'
 export const SAMPLED_FINALS_BASE64 = '${encodeUint32(sampledFinals)}'
 export const SAMPLED_TONES_BASE64 = '${encodeUint32(sampledTones)}'
