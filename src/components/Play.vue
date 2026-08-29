@@ -341,6 +341,14 @@ watchEffect(() => {
                 排名 {{ entry.result?.rankingMs.toFixed(1) ?? '跳过' }} ms；
                 总耗时 {{ entry.elapsedMs.toFixed(1) }} ms
               </div>
+              <div mt1 op60>
+                precompute {{ entry.preparationMs.toFixed(1) }} ms
+                (generation {{ entry.analysis?.generationMs.toFixed(1) ?? '-' }} /
+                ranking {{ entry.result?.rankingMs.toFixed(1) ?? 'skipped' }}) |
+                player {{ entry.playerMs.toFixed(1) }} ms |
+                ready {{ entry.readyBeforeSubmit ? 'yes' : 'no' }} |
+                queue {{ entry.queueWaitMs.toFixed(1) }} ms
+              </div>
               <div v-if="entry.after.degradation === 'corpus-saturated'" mt1 text-ok>
                 词库后验饱和（不代表逻辑上已无未知信息）
               </div>

@@ -6,6 +6,7 @@ import { ENDGAME_PRODUCT_LIMIT, createEndgamePrior, enumerateEndgame } from './e
 import type { EndgameBudget, EndgamePrior, EndgameSearch, PinyinHistoryEntry } from './eval-endgame'
 import { higherRating, matchesAllFeedback, specialRatingForGuess } from './eval-rating'
 import type { VisibleGuess } from './eval-rating'
+export { EVAL_VERSION, canAppendEvaluation, canReuseRatings } from './eval-version'
 export { feedbackCode, pinyinFeedbackCode } from './eval-feedback'
 import {
   CALIBRATION_SEED,
@@ -39,7 +40,6 @@ import {
   TONE_TUPLES_BASE64,
 } from '../data/eval-data'
 
-export const EVAL_VERSION = 5
 export const MAX_POSTERIOR_SAMPLES = 4096
 export const V3_PARTICLE_COUNT = 4096
 export const V3_VIRTUAL_POOL_LIMIT = 16384
@@ -68,25 +68,6 @@ export function compressionForInformation(information: number, posteriorProduct:
 
 export function compressPercentile(percentile: number, compression: number): number {
   return percentile <= 0.70 ? percentile : (1 - compression) * percentile + compression * 0.701
-}
-
-export function canReuseRatings(
-  ratingsVersion: number | undefined,
-  ratingsLength: number | undefined,
-  triesLength: number,
-): boolean {
-  return ratingsVersion === EVAL_VERSION && ratingsLength === triesLength
-}
-
-export function canAppendEvaluation(
-  previousGameKey: string,
-  previousWords: readonly string[],
-  gameKey: string,
-  words: readonly string[],
-): boolean {
-  return gameKey === previousGameKey
-    && previousWords.length < words.length
-    && previousWords.every((word, index) => word === words[index])
 }
 
 const initialIndex = new Map<string, number>(INITIALS.map((value, index) => [value, index]))
@@ -641,6 +622,10 @@ export interface EvalResult extends EvalAnalysis {
   fallback: boolean
   generationMs: number
   rankingMs: number
+  playerMs: number
+  preparationMs: number
+  readyBeforeSubmit?: boolean
+  queueWaitMs?: number
   elapsedMs: number
   sampled?: EvalDebugEntry[]
 }
@@ -941,6 +926,34 @@ interface PlayerAnalysis {
   v3?: V3Particles
 }
 
+interface PreparedBenchmarks {
+  sortedScores: Float64Array
+  entries?: EvalDebugEntry[]
+  rankingMs: number
+}
+
+/** Everything that can be computed before the player submits the next guess. */
+export interface PreparedEvaluation {
+  historyLength: number
+  particles?: EvalParticles
+  tones: Uint32Array
+  v3?: V3Particles
+  model: 'v3' | 'endgame'
+  initialUnique: number
+  finalUnique: number
+  posteriorProduct: number
+  informationBefore: number
+  informationIsLowerBound: boolean
+  toneWeight: number
+  compression: number
+  candidateCount: number
+  search?: Pick<EndgameSearch, 'status' | 'complete' | 'nodes' | 'candidatesFound' | 'reason'>
+  reason?: string
+  generationMs: number
+  preparationMs: number
+  benchmarks?: PreparedBenchmarks
+}
+
 let endgamePriorCache: EndgamePrior | undefined
 function getEndgamePrior(): EndgamePrior {
   return endgamePriorCache ||= createEndgamePrior(getSyllableCounts(), new Map<number, number>(
@@ -954,7 +967,7 @@ export function getPosteriorSizes(state: EvalState): { initialUnique: number; fi
   return { initialUnique, finalUnique, posteriorProduct: initialUnique * finalUnique }
 }
 
-function analyzeInternal(
+export function analyzeInternalLegacy(
   state: EvalState,
   parsedGuess: readonly ParsedChar[],
   results?: readonly MatchResult[],
@@ -1037,6 +1050,211 @@ function analyzeInternal(
   return { analysis, particles, tones, v3 }
 }
 
+export function prepareEvaluation(
+  state: EvalState,
+  options: { rank?: boolean; includeDebug?: boolean; budget?: EndgameBudget } = {},
+): PreparedEvaluation {
+  const startedAt = performance.now()
+  const sizes = getPosteriorSizes(state)
+  const informationBefore = combineActualInformation(state.information.i1, state.information.i2)
+  const historySeed = (state.diagnostics?.pinyinHistoryHash ?? SAMPLE_SEED)
+    ^ state.initialHistoryHash ^ state.finalHistoryHash ^ CALIBRATION_SEED
+  const tones = sampleTuples(state.toneRows, getToneTuples(), state.toneHistoryHash ^ historySeed ^ 0x70AE3)
+  const prepared: PreparedEvaluation = {
+    historyLength: state.history.length,
+    ...sizes,
+    model: sizes.posteriorProduct <= ENDGAME_PRODUCT_LIMIT ? 'endgame' : 'v3',
+    informationBefore,
+    informationIsLowerBound: !!(state.information.missingI1 || state.information.missingI2),
+    toneWeight: toneWeightForInformation(informationBefore),
+    compression: compressionForInformation(informationBefore, sizes.posteriorProduct),
+    candidateCount: 0,
+    tones,
+    generationMs: 0,
+    preparationMs: 0,
+  }
+
+  if (prepared.model === 'endgame') {
+    const search = enumerateEndgame(state.history, getEndgamePrior(), options.budget)
+    prepared.search = {
+      status: search.status,
+      complete: search.complete,
+      nodes: search.nodes,
+      candidatesFound: search.candidatesFound,
+      reason: search.reason,
+    }
+    if (search.status === 'complete') prepared.particles = search
+    else prepared.reason = search.reason
+  }
+  else {
+    prepared.v3 = createV3Particles(state) || undefined
+    prepared.particles = prepared.v3
+    if (!prepared.particles)
+      prepared.reason = 'Joint posterior unavailable; regular rating paused'
+  }
+  prepared.candidateCount = prepared.particles?.initials.length || 0
+  prepared.generationMs = performance.now() - startedAt
+
+  if (options.rank !== false && prepared.particles?.initials.length && tones.length) {
+    const rankingStartedAt = performance.now()
+    const sampledInitials = getSampledInitials()
+    const sampledFinals = getSampledFinals()
+    const sampledTones = getSampledTones()
+    const scores = new Float64Array(SAMPLE_SIZE)
+    const entries: EvalDebugEntry[] | undefined = options.includeDebug ? [] : undefined
+    for (let index = 0; index < SAMPLE_SIZE; index++) {
+      const e1 = jointFeedbackEntropy(sampledInitials[index], sampledFinals[index], prepared.particles)
+      const e2 = feedbackEntropy(sampledTones[index], tones, TONE_BITS)
+      const ei = combineExpectedInformation(e1, e2, prepared.toneWeight)
+      scores[index] = ei
+      entries?.push({ word: SAMPLED_WORDS[index], ei, e1, e2 })
+    }
+    entries?.sort((left, right) => right.ei - left.ei)
+    scores.sort()
+    prepared.benchmarks = {
+      sortedScores: scores,
+      entries,
+      rankingMs: performance.now() - rankingStartedAt,
+    }
+  }
+  prepared.preparationMs = performance.now() - startedAt
+  return prepared
+}
+
+function analyzePrepared(
+  state: EvalState,
+  prepared: PreparedEvaluation,
+  parsedGuess: readonly ParsedChar[],
+  results?: readonly MatchResult[],
+): PlayerAnalysis {
+  const startedAt = performance.now()
+  const matchesHistory = matchesAllFeedback(parsedGuess, state.visibleHistory)
+  const won = results?.length === WORD_LENGTH && results.every(result => result.char === 'exact')
+  const guess = parseParsedTuples(parsedGuess)
+  const e2 = feedbackEntropy(guess.tone, prepared.tones, TONE_BITS)
+  let i2: number | undefined
+  if (results && state.toneRows.length) {
+    const code = observedCode(parsedGuess, results, 'tone')
+    let hits = 0
+    for (const row of state.toneRows) {
+      if (feedbackCode(guess.tone, getToneTuples()[row], TONE_BITS) === code) hits++
+    }
+    if (hits) i2 = -Math.log2(hits / state.toneRows.length)
+  }
+
+  const analysis: EvalAnalysis = {
+    matchesHistory,
+    won,
+    specialRating: specialRatingForGuess(prepared.informationBefore, matchesHistory, won),
+    model: prepared.model,
+    initialUnique: prepared.initialUnique,
+    finalUnique: prepared.finalUnique,
+    posteriorProduct: prepared.posteriorProduct,
+    informationBefore: prepared.informationBefore,
+    informationIsLowerBound: prepared.informationIsLowerBound,
+    toneWeight: prepared.toneWeight,
+    compression: prepared.compression,
+    candidateCount: prepared.candidateCount,
+    search: prepared.search,
+    reason: prepared.reason,
+    e2,
+    i2,
+    generationMs: prepared.generationMs,
+    elapsedMs: 0,
+  }
+  const particles = prepared.particles
+  if (particles?.initials.length && Number.isFinite(e2)) {
+    const observed = results
+      ? observedCode(parsedGuess, results, 'initial')
+        + observedCode(parsedGuess, results, 'final') * FEEDBACK_BUCKETS
+        + observedCode(parsedGuess, results, 'pinyin') * FEEDBACK_BUCKETS ** 2
+      : undefined
+    const base = jointFeedbackStatistics(guess.initial, guess.final, particles, observed)
+    analysis.e1 = base.entropy
+    analysis.playerEI = combineExpectedInformation(base.entropy, e2, analysis.toneWeight)
+    if (analysis.model === 'endgame') {
+      analysis.i1 = base.information
+    }
+    else if (observed != null) {
+      const real = realJointFeedbackCount(state, guess.initial, guess.final, observed)
+      const details = real && base.observedCount != null
+        ? blendI1Probability(base.observedCount, base.sampleSize, real.hits, real.total)
+        : null
+      analysis.i1Details = details || undefined
+      analysis.i1 = details ? -Math.log2(details.blendedProbability) : undefined
+    }
+  }
+  else if (!analysis.reason) {
+    analysis.reason = 'Tone posterior unavailable; regular rating paused'
+  }
+  analysis.elapsedMs = performance.now() - startedAt
+  return { analysis, particles, tones: prepared.tones, v3: prepared.v3 }
+}
+
+export function strictLowerBound(sorted: ArrayLike<number>, value: number): number {
+  let low = 0
+  let high = sorted.length
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (sorted[middle] < value) low = middle + 1
+    else high = middle
+  }
+  return low
+}
+
+function rankPreparedAnalysis(
+  state: EvalState,
+  prepared: PreparedEvaluation,
+  context: PlayerAnalysis,
+): EvalResult | null {
+  const { analysis, particles, tones, v3 } = context
+  const { e1, playerEI } = analysis
+  const benchmarks = prepared.benchmarks
+  if (!benchmarks || !particles || e1 == null || playerEI == null || !Number.isFinite(playerEI))
+    return null
+
+  const lowerCount = strictLowerBound(benchmarks.sortedScores, playerEI)
+  const rawPercentile = lowerCount / SAMPLE_SIZE
+  const percentile = compressPercentile(rawPercentile, analysis.compression)
+  const normalRating = ratingFromPercentile(percentile)
+  return {
+    ...analysis,
+    e1,
+    playerEI,
+    rawPercentile,
+    percentile,
+    normalRating,
+    rating: higherRating(normalRating, analysis.specialRating)!,
+    rank: lowerCount,
+    total: SAMPLE_SIZE,
+    initialPosterior: state.initialRows.length,
+    finalPosterior: state.finalRows.length,
+    tonePosterior: state.toneRows.length,
+    initialParticles: particles.initials.length,
+    finalParticles: particles.finals.length,
+    toneParticles: tones.length,
+    effectiveHypotheses: v3?.effectiveHypotheses ?? 0,
+    lambda: v3?.lambda ?? 0,
+    realParticles: v3?.realCount ?? 0,
+    virtualParticles: v3?.virtualCount ?? 0,
+    attempts: v3?.attempts ?? 0,
+    accepted: v3?.accepted ?? 0,
+    acceptanceRate: v3?.attempts ? v3.accepted / v3.attempts : 0,
+    invalidSyllableRejected: v3?.invalidSyllableRejected ?? 0,
+    pinyinHistoryRejected: v3?.pinyinHistoryRejected ?? 0,
+    clippedSignatureCount: v3?.clippedSignatureCount ?? 0,
+    candidateEffective: v3?.candidateEffective ?? 0,
+    resampledEffective: v3?.resampledEffective ?? 0,
+    fallback: v3?.fallback ?? false,
+    generationMs: prepared.generationMs,
+    rankingMs: benchmarks.rankingMs,
+    playerMs: analysis.elapsedMs,
+    preparationMs: prepared.preparationMs,
+    elapsedMs: prepared.preparationMs + analysis.elapsedMs,
+    sampled: benchmarks.entries,
+  }
+}
+
 /** Reconstruct actual information without redoing the 1000-word ranking. */
 export function analyzeGuess(
   state: EvalState,
@@ -1044,10 +1262,11 @@ export function analyzeGuess(
   results: readonly MatchResult[],
   budget?: EndgameBudget,
 ): EvalAnalysis {
-  return analyzeInternal(state, parsedGuess, results, budget).analysis
+  const prepared = prepareEvaluation(state, { rank: false, budget })
+  return analyzePrepared(state, prepared, parsedGuess, results).analysis
 }
 
-function rankAnalysis(
+export function rankAnalysisLegacy(
   state: EvalState,
   context: PlayerAnalysis,
   includeDebug: boolean,
@@ -1097,7 +1316,11 @@ function rankAnalysis(
     candidateEffective: v3?.candidateEffective ?? 0,
     resampledEffective: v3?.resampledEffective ?? 0,
     fallback: v3?.fallback ?? false,
-    rankingMs, elapsedMs: analysis.elapsedMs + rankingMs, sampled: entries,
+    rankingMs,
+    playerMs: analysis.elapsedMs,
+    preparationMs: analysis.generationMs + rankingMs,
+    elapsedMs: analysis.elapsedMs + rankingMs,
+    sampled: entries,
   }
 }
 
@@ -1109,7 +1332,24 @@ export function evaluate(
   results?: readonly MatchResult[],
   budget?: EndgameBudget,
 ): EvalResult | null {
-  return rankAnalysis(state, analyzeInternal(state, parsedGuess, results, budget), includeDebug)
+  const prepared = prepareEvaluation(state, { includeDebug, budget })
+  return rankPreparedAnalysis(state, prepared, analyzePrepared(state, prepared, parsedGuess, results))
+}
+
+export function advancePreparedEvaluation(
+  state: EvalState,
+  prepared: PreparedEvaluation,
+  parsedGuess: readonly ParsedChar[],
+  results: readonly MatchResult[],
+  options: { rank?: boolean } = {},
+): { analysis: EvalAnalysis; result: EvalResult | null; rating: Rating | null; valid: boolean } {
+  if (prepared.historyLength !== state.history.length)
+    throw new Error('Prepared evaluation does not match the current history')
+  const context = analyzePrepared(state, prepared, parsedGuess, results)
+  const result = options.rank === false ? null : rankPreparedAnalysis(state, prepared, context)
+  const valid = updateState(state, parsedGuess, results, context.analysis)
+  const rating = higherRating(result?.rating, context.analysis.specialRating)
+  return { analysis: context.analysis, result, rating, valid }
 }
 
 /** Single session step shared by live play and replay, including paused searches. */
@@ -1119,12 +1359,8 @@ export function advanceEvaluation(
   results: readonly MatchResult[],
   options: { rank?: boolean; includeDebug?: boolean; budget?: EndgameBudget } = {},
 ): { analysis: EvalAnalysis; result: EvalResult | null; rating: Rating | null; valid: boolean } {
-  const context = analyzeInternal(state, parsedGuess, results, options.budget)
-  const result = options.rank === false ? null : rankAnalysis(state, context, !!options.includeDebug)
-  const valid = updateState(state, parsedGuess, results, context.analysis)
-  // A directly established special rating does not need an entropy estimate.
-  const rating = higherRating(result?.rating, context.analysis.specialRating)
-  return { analysis: context.analysis, result, rating, valid }
+  const prepared = prepareEvaluation(state, options)
+  return advancePreparedEvaluation(state, prepared, parsedGuess, results, options)
 }
 
 function filterRows(

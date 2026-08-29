@@ -1,13 +1,15 @@
 import { breakpointsTailwind } from '@vueuse/core'
-import type { MatchType, ParsedChar, Rating } from './logic'
+import type { MatchType, ParsedChar } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
 import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
-import { EVAL_VERSION, advanceEvaluation, canAppendEvaluation, canReuseRatings, createEvalState, getEvalDiagnosticSnapshot } from './logic/eval'
-import type { EvalAnalysis, EvalDiagnosticSnapshot, EvalResult, EvalState } from './logic/eval'
+import { EVAL_VERSION, canAppendEvaluation, canReuseRatings } from './logic/eval-version'
+import type { EvalResult } from './logic/eval'
+import type { EvalDebugTraceEntry, EvalSessionSnapshot, EvalWorkerRequest, EvalWorkerResponse } from './logic/eval-worker'
+import { createEvaluationWorker } from './logic/eval-worker-factory'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -217,30 +219,22 @@ export function resetCustomGame() {
 
 // ============ Evaluation ============
 
-export interface EvalDebugTraceEntry {
-  guess: number
-  word: string
-  before: EvalDiagnosticSnapshot
-  after: EvalDiagnosticSnapshot
-  initialRetained: number
-  finalRetained: number
-  toneRetained: number
-  ifRetained: number
-  ifPyRetained: number
-  elapsedMs: number
-  analysis?: EvalAnalysis
-  result?: EvalResult
-  rating?: Rating
-  cumulativeI1: number
-  cumulativeI2: number
-  missingI1: number
-  missingI2: number
+function emptyEvalSnapshot(): EvalSessionSnapshot {
+  return {
+    historyLength: 0,
+    visibleHistoryLength: 0,
+    information: { i1: 0, i2: 0, missingI1: 0, missingI2: 0 },
+    valid: true,
+    diagnostics: null,
+  }
 }
 
-export const evalState = ref<EvalState>(createEvalState({ diagnostics: true }))
+export const evalSessionSnapshot = ref<EvalSessionSnapshot>(emptyEvalSnapshot())
 export const triesRatings = computed(() => meta.value.ratings || [])
 export const lastEvalDebug = ref<EvalResult | null>(null)
 export const evalDebugTrace = ref<EvalDebugTraceEntry[]>([])
+export const evalReadyIndex = ref(-1)
+export const evalWorkerDisabled = ref(false)
 
 const evalGameKey = computed(() => {
   if (playMode.value === 'daily')
@@ -252,126 +246,196 @@ const evalGameKey = computed(() => {
 
 let evaluatedGameKey = ''
 let evaluatedWords: string[] = []
+let evalWorker: Worker | null = null
+let evalSessionId = 0
+let evalWorkerFailures = 0
+let activeEvalGameKey = ''
+let activeEvalWords: string[] = []
+let pendingEvalRatings = new Set<number>()
 
-function evaluateAndApply(
-  state: EvalState,
-  word: string,
-  shouldEvaluate: boolean,
-  includeDebug: boolean,
-): { result: EvalResult | null; rating: Rating | null } {
-  try {
-    const startedAt = performance.now()
-    const diagnosticsBefore = isDev ? getEvalDiagnosticSnapshot(state) : null
-    const parsed = parseWord(word)
-    const feedback = testAnswer(parsed)
-    const { result, analysis, rating, valid } = advanceEvaluation(state, parsed, feedback, {
-      rank: shouldEvaluate, includeDebug,
-    })
-    const diagnosticsAfter = isDev ? getEvalDiagnosticSnapshot(state) : null
-    const elapsedMs = performance.now() - startedAt
-    if (result) {
-      result.initialPosterior = state.initialRows.length
-      result.finalPosterior = state.finalRows.length
-      result.tonePosterior = state.toneRows.length
-    }
-    if (diagnosticsBefore && diagnosticsAfter) {
-      const retained = (after: number, before: number) => before ? after / before : 0
-      evalDebugTrace.value.push({
-        guess: evalDebugTrace.value.length + 1,
-        word,
-        before: diagnosticsBefore,
-        after: diagnosticsAfter,
-        initialRetained: retained(diagnosticsAfter.initialRows, diagnosticsBefore.initialRows),
-        finalRetained: retained(diagnosticsAfter.finalRows, diagnosticsBefore.finalRows),
-        toneRetained: retained(diagnosticsAfter.toneRows, diagnosticsBefore.toneRows),
-        ifRetained: retained(diagnosticsAfter.ifRows, diagnosticsBefore.ifRows),
-        ifPyRetained: retained(diagnosticsAfter.ifPyRows, diagnosticsBefore.ifPyRows),
-        elapsedMs,
-        analysis: analysis || undefined,
-        result: result || undefined,
-        rating: shouldEvaluate ? rating ?? undefined : undefined,
-        cumulativeI1: state.information.i1,
-        cumulativeI2: state.information.i2,
-        missingI1: state.information.missingI1,
-        missingI2: state.information.missingI2,
-      })
-    }
-    if (analysis.reason && isDev)
-      console.warn('[evaluation] guess paused', { word, reason: analysis.reason })
-    if (!valid && isDev)
-      console.warn('[evaluation] posterior became empty', { word, feedback })
-    else if (diagnosticsAfter?.degradation === 'invalid' && isDev)
-      console.warn('[evaluation] diagnostic joint posterior became empty', { word, feedback })
-    return valid ? { result, rating } : { result: null, rating: null }
-  }
-  catch (error) {
-    state.valid = false
-    if (isDev)
-      console.warn('[evaluation] unsupported guess; evaluation disabled for this game', { word, error })
-    return { result: null, rating: null }
+function terminateEvalWorker(): void {
+  evalWorker?.terminate()
+  evalWorker = null
+  evalReadyIndex.value = -1
+}
+
+function createWorkerGuess(word: string, index: number) {
+  const parsed = parseWord(word)
+  return {
+    index,
+    word,
+    parsed,
+    feedback: testAnswer(parsed),
   }
 }
 
-function rebuildEvaluation(words: readonly string[], replacedHistory = false): void {
-  const state = createEvalState({ diagnostics: true })
-  const storedRatingsAreCurrent = !replacedHistory && canReuseRatings(
+function isCurrentEvalSession(sessionId: number): boolean {
+  return sessionId === evalSessionId
+    && activeEvalGameKey === evalGameKey.value
+    && hasActiveAnswer.value
+}
+
+function persistRatingsVersionIfComplete(): void {
+  if (pendingEvalRatings.size || meta.value.ratings?.length !== activeEvalWords.length)
+    return
+  meta.value.ratingsVersion = EVAL_VERSION
+}
+
+function handleEvalWorkerMessage(event: MessageEvent<EvalWorkerResponse>): void {
+  const response = event.data
+  if (!isCurrentEvalSession(response.sessionId))
+    return
+  if (response.type === 'error') {
+    handleEvalWorkerFailure(response.sessionId, response.message)
+    return
+  }
+
+  evalSessionSnapshot.value = response.snapshot
+  if (response.type === 'ready') {
+    evalReadyIndex.value = response.index
+    persistRatingsVersionIfComplete()
+    return
+  }
+  if (activeEvalWords[response.index] !== response.word)
+    return
+
+  if (response.trace) {
+    const trace = [...evalDebugTrace.value]
+    trace[response.index] = response.trace
+    evalDebugTrace.value = trace
+  }
+  if (response.result && response.index === activeEvalWords.length - 1)
+    lastEvalDebug.value = response.result
+  if (response.applyRating) {
+    const ratings = [...(meta.value.ratings || [])]
+    ratings[response.index] = response.rating
+    meta.value.ratings = ratings
+    pendingEvalRatings.delete(response.index)
+    persistRatingsVersionIfComplete()
+  }
+  if (response.result?.reason && isDev)
+    console.warn('[evaluation] guess paused', { word: response.word, reason: response.result.reason })
+  if (!response.snapshot.valid && isDev)
+    console.warn('[evaluation] posterior became empty', { word: response.word })
+}
+
+function launchEvalWorker(request: EvalWorkerRequest): void {
+  const sessionId = request.sessionId
+  try {
+    const worker = createEvaluationWorker()
+    evalWorker = worker
+    worker.onmessage = handleEvalWorkerMessage
+    worker.onerror = event => handleEvalWorkerFailure(sessionId, event.message || 'Worker error')
+    worker.postMessage(request)
+  }
+  catch (error) {
+    handleEvalWorkerFailure(sessionId, error instanceof Error ? error.message : String(error))
+  }
+}
+
+function handleEvalWorkerFailure(sessionId: number, message: string): void {
+  if (!isCurrentEvalSession(sessionId))
+    return
+  terminateEvalWorker()
+  evalWorkerFailures++
+  if (evalWorkerFailures <= 1) {
+    startEvaluationSession(activeEvalGameKey, activeEvalWords, false, false)
+    return
+  }
+  evalWorkerDisabled.value = true
+  meta.value.ratingsVersion = undefined
+  if (isDev)
+    console.warn('[evaluation] worker unavailable; evaluation disabled for this game', { message })
+}
+
+function startEvaluationSession(
+  gameKey: string,
+  words: readonly string[],
+  replacedHistory: boolean,
+  resetFailures = true,
+): void {
+  terminateEvalWorker()
+  evalSessionId++
+  activeEvalGameKey = gameKey
+  activeEvalWords = [...words]
+  if (resetFailures)
+    evalWorkerFailures = 0
+  evalWorkerDisabled.value = false
+  evalSessionSnapshot.value = emptyEvalSnapshot()
+  lastEvalDebug.value = null
+  evalDebugTrace.value = []
+
+  const ratingsCurrent = !replacedHistory && canReuseRatings(
     meta.value.ratingsVersion,
     meta.value.ratings?.length,
     words.length,
   )
-  const ratings = storedRatingsAreCurrent
-    ? [...meta.value.ratings!]
-    : Array.from({ length: words.length }, () => null)
-
-  lastEvalDebug.value = null
-  evalDebugTrace.value = []
-  for (let index = 0; index < words.length; index++) {
-    const shouldEvaluate = !storedRatingsAreCurrent || (isDev && index === words.length - 1)
-    const { result, rating } = evaluateAndApply(
-      state,
-      words[index],
-      shouldEvaluate,
-      isDev && index === words.length - 1,
-    )
-    if (!storedRatingsAreCurrent)
-      ratings[index] = rating
-    else if (!state.valid)
-      ratings[index] = null
-    if (isDev && index === words.length - 1)
-      lastEvalDebug.value = result
+  if (ratingsCurrent) {
+    pendingEvalRatings = new Set()
+  }
+  else {
+    pendingEvalRatings = new Set(words.map((_, index) => index))
+    meta.value.ratings = Array.from({ length: words.length }, () => null)
+    meta.value.ratingsVersion = undefined
   }
 
-  evalState.value = state
-  meta.value.ratings = ratings
-  meta.value.ratingsVersion = EVAL_VERSION
+  const request: EvalWorkerRequest = {
+    type: 'init',
+    sessionId: evalSessionId,
+    guesses: words.map(createWorkerGuess),
+    ratingsCurrent,
+    includeDebug: isDev,
+  }
+  launchEvalWorker(request)
 }
 
 function appendEvaluations(words: readonly string[]): void {
-  const ratings = meta.value.ratingsVersion === EVAL_VERSION
-    ? [...(meta.value.ratings || [])]
-    : []
-
+  const ratings = [...(meta.value.ratings || [])]
+  activeEvalWords = [...words]
   for (let index = evaluatedWords.length; index < words.length; index++) {
-    const { result, rating } = evaluateAndApply(evalState.value, words[index], true, isDev)
-    ratings[index] = rating
-    if (isDev)
-      lastEvalDebug.value = result
+    ratings[index] = null
+    pendingEvalRatings.add(index)
   }
-
   meta.value.ratings = ratings
-  meta.value.ratingsVersion = EVAL_VERSION
+  meta.value.ratingsVersion = undefined
+
+  if (!evalWorker)
+    return
+  for (let index = evaluatedWords.length; index < words.length; index++) {
+    const request: EvalWorkerRequest = {
+      type: 'append',
+      sessionId: evalSessionId,
+      guess: createWorkerGuess(words[index], index),
+      readyWhenSubmitted: evalReadyIndex.value === index,
+      submittedAt: Date.now(),
+    }
+    evalWorker.postMessage(request)
+  }
 }
 
 watch(
   [evalGameKey, () => hasActiveAnswer.value ? tries.value.join('\u0000') : ''],
   ([gameKey]) => {
     const words = hasActiveAnswer.value ? [...tries.value] : []
+    if (!hasActiveAnswer.value) {
+      terminateEvalWorker()
+      evalSessionId++
+      activeEvalGameKey = ''
+      activeEvalWords = []
+      pendingEvalRatings = new Set()
+      evalSessionSnapshot.value = emptyEvalSnapshot()
+      lastEvalDebug.value = null
+      evalDebugTrace.value = []
+      evaluatedGameKey = gameKey
+      evaluatedWords = words
+      return
+    }
     const canAppend = canAppendEvaluation(evaluatedGameKey, evaluatedWords, gameKey, words)
 
     if (canAppend)
       appendEvaluations(words)
     else if (gameKey !== evaluatedGameKey || words.join('\u0000') !== evaluatedWords.join('\u0000'))
-      rebuildEvaluation(words, gameKey === evaluatedGameKey)
+      startEvaluationSession(gameKey, words, gameKey === evaluatedGameKey)
 
     evaluatedGameKey = gameKey
     evaluatedWords = words
