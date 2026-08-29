@@ -1,6 +1,6 @@
-import { WORD_LENGTH } from './constants'
-import type { MatchResult, ParsedChar, Rating } from './types'
-import { testAnswer } from './utils'
+import { WORD_LENGTH } from '../logic/constants'
+import type { MatchResult, ParsedChar, Rating } from '../logic/types'
+import { testAnswer } from '../logic/utils'
 
 export interface VisibleGuess {
   guess: ParsedChar[]

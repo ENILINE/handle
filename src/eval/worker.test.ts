@@ -7,10 +7,10 @@ import {
   rankAnalysisLegacy,
   strictLowerBound,
   updateState,
-} from './eval'
-import { EvalWorkerEngine } from './eval-worker'
-import type { EvalWorkerResponse } from './eval-worker'
-import { parseWord, testAnswer } from './utils'
+} from './index'
+import { EvalWorkerEngine } from './worker'
+import type { EvalWorkerResponse } from './worker'
+import { parseWord, testAnswer } from '../logic/utils'
 
 describe('prepared evaluation parity', () => {
   it('keeps V3 entropy, strict rank, rating and actual information unchanged', () => {

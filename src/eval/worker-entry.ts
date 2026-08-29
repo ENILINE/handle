@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
-import { EvalWorkerEngine } from './eval-worker'
-import type { EvalWorkerRequest, EvalWorkerResponse } from './eval-worker'
+import { EvalWorkerEngine } from './worker'
+import type { EvalWorkerRequest, EvalWorkerResponse } from './worker'
 
 const engine = new EvalWorkerEngine()
 

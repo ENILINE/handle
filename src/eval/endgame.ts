@@ -1,5 +1,5 @@
-import { FINAL_BITS, FINALS, INITIAL_BITS, NULL_INITIAL_ID, SIGNATURE_WEIGHT_MIN } from '../data/eval-data'
-import { endgameStructureSignature, feedbackCode, packTuple, pinyinFeedbackCode, tupleValue } from './eval-feedback'
+import { FINAL_BITS, FINALS, INITIAL_BITS, NULL_INITIAL_ID, SIGNATURE_WEIGHT_MIN } from './data'
+import { endgameStructureSignature, feedbackCode, packTuple, pinyinFeedbackCode, tupleValue } from './feedback'
 
 export const ENDGAME_PRODUCT_LIMIT = 32
 export const ENDGAME_NODE_LIMIT = 262144

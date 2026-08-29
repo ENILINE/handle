@@ -1,6 +1,6 @@
-import type { MatchResult, ParsedChar } from './types'
-import { WORD_LENGTH } from './constants'
-import { FINAL_BITS, FINALS, INITIAL_BITS, NULL_INITIAL_ID } from '../data/eval-data'
+import type { MatchResult, ParsedChar } from '../logic/types'
+import { WORD_LENGTH } from '../logic/constants'
+import { FINAL_BITS, FINALS, INITIAL_BITS, NULL_INITIAL_ID } from './data'
 
 const NONE = 0
 const MISPLACED = 1

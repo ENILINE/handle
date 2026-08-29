@@ -1,5 +1,5 @@
-import { EvalWorkerEngine } from './eval-worker'
-import type { EvalWorkerRequest, EvalWorkerResponse } from './eval-worker'
+import { EvalWorkerEngine } from './worker'
+import type { EvalWorkerRequest, EvalWorkerResponse } from './worker'
 
 /** Browser-free worker adapter used by state integration tests. */
 export class InlineEvaluationWorker {

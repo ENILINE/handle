@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { Rating } from '~/logic/types'
-import brilliantSvg from '~/assets/eval/brilliant.svg'
-import excellentSvg from '~/assets/eval/excellent.svg'
-import goodSvg from '~/assets/eval/good.svg'
-import averageSvg from '~/assets/eval/average.svg'
-import mistakeSvg from '~/assets/eval/mistake.svg'
-import incorrectSvg from '~/assets/eval/incorrect.svg'
+import brilliantSvg from './assets/brilliant.svg'
+import excellentSvg from './assets/excellent.svg'
+import goodSvg from './assets/good.svg'
+import averageSvg from './assets/average.svg'
+import mistakeSvg from './assets/mistake.svg'
+import incorrectSvg from './assets/incorrect.svg'
 import { t } from '~/i18n'
 
 const props = defineProps<{

@@ -6,10 +6,10 @@ import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
 import type { CustomPayload } from './logic/types'
-import { EVAL_VERSION, canAppendEvaluation, canReuseRatings } from './logic/eval-version'
-import type { EvalResult } from './logic/eval'
-import type { EvalDebugTraceEntry, EvalSessionSnapshot, EvalWorkerRequest, EvalWorkerResponse } from './logic/eval-worker'
-import { createEvaluationWorker } from './logic/eval-worker-factory'
+import { EVAL_VERSION, canAppendEvaluation, canReuseRatings } from './eval/version'
+import type { EvalResult } from './eval'
+import type { EvalDebugTraceEntry, EvalSessionSnapshot, EvalWorkerRequest, EvalWorkerResponse } from './eval/worker'
+import { createEvaluationWorker } from './eval/worker-factory'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)

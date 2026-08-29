@@ -2,12 +2,12 @@
 import { afterAll, expect, it, vi } from 'vitest'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useBreakpoints, useDark, useDebounce, useNow, useStorage } from '@vueuse/core'
-import { EvalWorkerEngine } from './logic/eval-worker'
-import type { EvalWorkerRequest, EvalWorkerResponse } from './logic/eval-worker'
-import { EVAL_VERSION } from './logic/eval-version'
-import { setEvaluationWorkerFactoryForTests } from './logic/eval-worker-factory'
+import { EvalWorkerEngine } from './worker'
+import type { EvalWorkerRequest, EvalWorkerResponse } from './worker'
+import { EVAL_VERSION } from './version'
+import { setEvaluationWorkerFactoryForTests } from './worker-factory'
 
-vi.mock('./logic/random', () => ({ getRandomAnswer: () => ({ word: '狂风怒号', hint: '风' }) }))
+vi.mock('../logic/random', () => ({ getRandomAnswer: () => ({ word: '狂风怒号', hint: '风' }) }))
 
 const globals = { computed, nextTick, ref, watch, useBreakpoints, useDark, useDebounce, useNow, useStorage }
 const previousGlobals = Object.keys(globals).map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)
@@ -58,8 +58,8 @@ afterAll(() => {
 it('persists only resolved ratings and ignores responses from a terminated mode session', async () => {
   window.history.replaceState({}, '', '/handle/?word=举一反三&d=0')
   localStorage.clear()
-  const app = await import('./state')
-  const storage = await import('./storage')
+  const app = await import('../state')
+  const storage = await import('../storage')
   await nextTick()
   const dailyWorker = workers[0]
   const dailySession = (dailyWorker.requests[0] as Extract<EvalWorkerRequest, { type: 'init' }>).sessionId

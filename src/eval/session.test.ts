@@ -2,12 +2,12 @@
 import { afterAll, expect, it, vi } from 'vitest'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useBreakpoints, useDark, useDebounce, useNow, useStorage } from '@vueuse/core'
-import { advanceEvaluation, createEvalState, EVAL_VERSION } from './logic/eval'
-import { parseWord, testAnswer } from './logic/utils'
-import { setEvaluationWorkerFactoryForTests } from './logic/eval-worker-factory'
-import { createInlineEvaluationWorker } from './logic/eval-worker-test'
+import { advanceEvaluation, createEvalState, EVAL_VERSION } from './index'
+import { parseWord, testAnswer } from '../logic/utils'
+import { setEvaluationWorkerFactoryForTests } from './worker-factory'
+import { createInlineEvaluationWorker } from './worker-test'
 
-vi.mock('./logic/random', () => ({ getRandomAnswer: () => ({ word: '狂风怒号', hint: '风' }) }))
+vi.mock('../logic/random', () => ({ getRandomAnswer: () => ({ word: '狂风怒号', hint: '风' }) }))
 
 // Auto-import transforms are disabled by this repository's TEST configuration.
 const globals = { computed, nextTick, ref, watch, useBreakpoints, useDark, useDebounce, useNow, useStorage }
@@ -33,8 +33,8 @@ function expectedInformation(answer: string, words: string[]) {
 }
 
 async function waitForEvaluation(
-  app: typeof import('./state'),
-  storage: typeof import('./storage'),
+  app: typeof import('../state'),
+  storage: typeof import('../storage'),
   historyLength: number,
   timeout = 30000,
 ): Promise<void> {
@@ -58,8 +58,8 @@ it('isolates modes, reconstructs persisted information and handles replaced same
     0: { tries: dailyWords, ratings: dailyWords.map(() => 'good'), ratingsVersion: EVAL_VERSION },
   }))
   window.history.replaceState({}, '', '/handle/?word=笔酣墨饱&d=0')
-  const app = await import('./state')
-  const storage = await import('./storage')
+  const app = await import('../state')
+  const storage = await import('../storage')
   await nextTick()
   await waitForEvaluation(app, storage, 5)
   expect(app.evalSessionSnapshot.value.historyLength).toBe(5)

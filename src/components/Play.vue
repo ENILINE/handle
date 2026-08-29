@@ -4,7 +4,7 @@ import { answer, customOrigin, dayNo, evalDebugTrace, hint, idiomSearchWord, isD
 import { gameMode, markStart, meta, showEval, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
-import EvalBadge from './EvalBadge.vue'
+import EvalBadge from '~/eval/Badge.vue'
 
 const el = ref<HTMLInputElement>()
 const input = ref('')

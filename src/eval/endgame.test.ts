@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, SAMPLED_WORDS, TONE_BITS } from '../data/eval-data'
-import { advanceEvaluation, compressPercentile, compressionForInformation, createEvalState, evalTesting, evaluate, feedbackEntropy, getPosteriorSizes, ratingFromPercentile, toneWeightForInformation } from './eval'
-import type { EvalState } from './eval'
-import { enumerateEndgame, satisfiesHistory } from './eval-endgame'
-import type { EndgamePrior, PinyinHistoryEntry } from './eval-endgame'
-import { endgameStructureSignature, feedbackCode, jointFeedbackCode, observedCode, packTuple, pinyinFeedbackCode, tupleValue } from './eval-feedback'
-import { parseChar, parseWord, testAnswer } from './utils'
+import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, SAMPLED_WORDS, TONE_BITS } from './data'
+import { advanceEvaluation, compressPercentile, compressionForInformation, createEvalState, evalTesting, evaluate, feedbackEntropy, getPosteriorSizes, ratingFromPercentile, toneWeightForInformation } from './index'
+import type { EvalState } from './index'
+import { enumerateEndgame, satisfiesHistory } from './endgame'
+import type { EndgamePrior, PinyinHistoryEntry } from './endgame'
+import { endgameStructureSignature, feedbackCode, jointFeedbackCode, observedCode, packTuple, pinyinFeedbackCode, tupleValue } from './feedback'
+import { parseChar, parseWord, testAnswer } from '../logic/utils'
 
 const firstFive = ['研经铸史', '先来后到', '投其所好', '分我杯羹', '按部就班']
 const secondFive = [...firstFive.slice(0, 4), '生不逢时']

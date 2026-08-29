@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const jsonlPath = resolve(scriptDir, '../playground/idioms.jsonl')
-const outputPath = resolve(scriptDir, '../src/data/eval-data.ts')
+const outputPath = resolve(scriptDir, '../src/eval/data.ts')
 
 const INITIALS = [
   'null', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h',

@@ -1,13 +1,13 @@
-import type { MatchResult, ParsedChar, Rating } from './types'
-import { getPinyin } from './idioms'
-import { WORD_LENGTH } from './constants'
-import { FEEDBACK_BUCKETS, feedbackCode, jointFeedbackCode, observedCode, packTuple, pinyinFeedbackCode, structureSignature, tupleValue } from './eval-feedback'
-import { ENDGAME_PRODUCT_LIMIT, createEndgamePrior, enumerateEndgame } from './eval-endgame'
-import type { EndgameBudget, EndgamePrior, EndgameSearch, PinyinHistoryEntry } from './eval-endgame'
-import { higherRating, matchesAllFeedback, specialRatingForGuess } from './eval-rating'
-import type { VisibleGuess } from './eval-rating'
-export { EVAL_VERSION, canAppendEvaluation, canReuseRatings } from './eval-version'
-export { feedbackCode, pinyinFeedbackCode } from './eval-feedback'
+import type { MatchResult, ParsedChar, Rating } from '../logic/types'
+import { getPinyin } from '../logic/idioms'
+import { WORD_LENGTH } from '../logic/constants'
+import { FEEDBACK_BUCKETS, feedbackCode, jointFeedbackCode, observedCode, packTuple, pinyinFeedbackCode, structureSignature, tupleValue } from './feedback'
+import { ENDGAME_PRODUCT_LIMIT, createEndgamePrior, enumerateEndgame } from './endgame'
+import type { EndgameBudget, EndgamePrior, EndgameSearch, PinyinHistoryEntry } from './endgame'
+import { higherRating, matchesAllFeedback, specialRatingForGuess } from './rating'
+import type { VisibleGuess } from './rating'
+export { EVAL_VERSION, canAppendEvaluation, canReuseRatings } from './version'
+export { feedbackCode, pinyinFeedbackCode } from './feedback'
 import {
   CALIBRATION_SEED,
   ENDGAME_SIGNATURE_KEYS,
@@ -38,7 +38,7 @@ import {
   SYLLABLE_COUNTS_BASE64,
   TONE_BITS,
   TONE_TUPLES_BASE64,
-} from '../data/eval-data'
+} from './data'
 
 export const MAX_POSTERIOR_SAMPLES = 4096
 export const V3_PARTICLE_COUNT = 4096

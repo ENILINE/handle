@@ -1,17 +1,17 @@
-import type { MatchResult, ParsedChar, Rating } from './types'
+import type { MatchResult, ParsedChar, Rating } from '../logic/types'
 import {
   advancePreparedEvaluation,
   createEvalState,
   getEvalDiagnosticSnapshot,
   prepareEvaluation,
-} from './eval'
+} from './index'
 import type {
   EvalAnalysis,
   EvalDiagnosticSnapshot,
   EvalResult,
   EvalState,
   PreparedEvaluation,
-} from './eval'
+} from './index'
 
 export interface EvalWorkerGuess {
   index: number

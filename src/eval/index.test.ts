@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, TONE_BITS } from '../data/eval-data'
+import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, TONE_BITS } from './data'
 import {
   analyzeGuess,
   blendI1Probability,
@@ -18,8 +18,8 @@ import {
   pinyinFeedbackCode,
   updateState,
   v3RealMixRatio,
-} from './eval'
-import { parseWord, testAnswer } from './utils'
+} from './index'
+import { parseWord, testAnswer } from '../logic/utils'
 
 const initialId = new Map<string, number>(INITIALS.map((value, index) => [value, index]))
 const finalId = new Map<string, number>(FINALS.map((value, index) => [value, index]))

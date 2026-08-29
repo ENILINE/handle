@@ -7,5 +7,5 @@ export function setEvaluationWorkerFactoryForTests(factory?: () => Worker): void
 export function createEvaluationWorker(): Worker {
   if (testFactory)
     return testFactory()
-  return new Worker(new URL('./eval.worker.ts', import.meta.url), { type: 'module' })
+  return new Worker(new URL('./worker-entry.ts', import.meta.url), { type: 'module' })
 }

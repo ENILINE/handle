@@ -3,8 +3,8 @@ import { afterAll, expect, it, vi } from 'vitest'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useBreakpoints, useDark, useDebounce, useNow, useStorage } from '@vueuse/core'
 import { encodeCustom } from './logic/encode'
-import { setEvaluationWorkerFactoryForTests } from './logic/eval-worker-factory'
-import { createInlineEvaluationWorker } from './logic/eval-worker-test'
+import { setEvaluationWorkerFactoryForTests } from './eval/worker-factory'
+import { createInlineEvaluationWorker } from './eval/worker-test'
 
 vi.mock('./logic/random', () => ({ getRandomAnswer: () => ({ word: '狂风怒号', hint: '风' }) }))
 
