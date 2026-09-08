@@ -32,6 +32,6 @@ const label = computed(() => t(RATING_LABEL_KEYS[props.rating]))
     role="img"
     :aria-label="label"
   >
-    <img :src="svgMap[rating]" w="21px" h="21px" alt="">
+    <img :src="svgMap[rating]" w="20px" h="20px" alt="">
   </span>
 </template>
