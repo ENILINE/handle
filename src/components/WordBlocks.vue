@@ -73,7 +73,8 @@ watchEffect(() => {
     <EvalBadge
       v-if="rating"
       :rating="rating"
-      absolute top-1 right-1 z-10
+      absolute z-10
+      style="top: -4px; right: -4px;"
     />
   </div>
 </template>
