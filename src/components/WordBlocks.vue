@@ -74,7 +74,7 @@ watchEffect(() => {
       v-if="rating"
       :rating="rating"
       absolute z-10
-      style="top: -1px; right: -7px;"
+      style="top: -3px; right: -7px;"
     />
   </div>
 </template>
