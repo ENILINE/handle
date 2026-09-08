@@ -78,6 +78,8 @@
   "share": "分享",
   "share-copied": "分享內容已複製到剪貼板",
   "share-not-copied": "請複製以下文本進行分享",
+  "share-copy-text": "複製文本",
+  "share-evaluation": "開啟評價",
   "share-with-system-api": "調用系統分享",
   "share-with-text": "文本分享",
   "shuangpin": "雙拼",

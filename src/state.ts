@@ -1,7 +1,7 @@
 import { breakpointsTailwind } from '@vueuse/core'
 import type { MatchType, ParsedChar } from './logic'
 import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
-import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, spMode, tries } from './storage'
+import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, showEval, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
@@ -10,6 +10,7 @@ import { EVAL_VERSION, canAppendEvaluation, canReuseRatings } from './eval/versi
 import type { EvalResult } from './eval'
 import type { EvalDebugTraceEntry, EvalSessionSnapshot, EvalWorkerRequest, EvalWorkerResponse } from './eval/worker'
 import { createEvaluationWorker } from './eval/worker-factory'
+import { isEvaluationAvailable } from './eval/presentation'
 
 export const isIOS = /iPad|iPhone|iPod/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 export const isMobile = isIOS || /iPad|iPhone|iPod|Android|Phone|webOS/i.test(navigator.userAgent)
@@ -69,6 +70,10 @@ export const useNumberTone = computed(() => {
     return false
   return _useNumberTone.value
 })
+
+export const activeGameMode = computed(() => meta.value.strict ?? _gameMode.value)
+export const evaluationAvailable = computed(() => isEvaluationAvailable(inputMode.value, activeGameMode.value))
+export const evaluationEnabled = computed(() => evaluationAvailable.value && showEval.value)
 
 const params = new URLSearchParams(window.location.search)
 export const isDev = import.meta.env.DEV || params.get('dev') === 'hey'
@@ -273,6 +278,7 @@ function isCurrentEvalSession(sessionId: number): boolean {
   return sessionId === evalSessionId
     && activeEvalGameKey === evalGameKey.value
     && hasActiveAnswer.value
+    && evaluationAvailable.value
 }
 
 function persistRatingsVersionIfComplete(): void {
@@ -414,10 +420,10 @@ function appendEvaluations(words: readonly string[]): void {
 }
 
 watch(
-  [evalGameKey, () => hasActiveAnswer.value ? tries.value.join('\u0000') : ''],
-  ([gameKey]) => {
+  [evalGameKey, () => hasActiveAnswer.value ? tries.value.join('\u0000') : '', evaluationAvailable],
+  ([gameKey, , available]) => {
     const words = hasActiveAnswer.value ? [...tries.value] : []
-    if (!hasActiveAnswer.value) {
+    if (!hasActiveAnswer.value || !available) {
       terminateEvalWorker()
       evalSessionId++
       activeEvalGameKey = ''
@@ -426,8 +432,9 @@ watch(
       evalSessionSnapshot.value = emptyEvalSnapshot()
       lastEvalDebug.value = null
       evalDebugTrace.value = []
-      evaluatedGameKey = gameKey
-      evaluatedWords = words
+      // Force a full replay when evaluation becomes available again.
+      evaluatedGameKey = ''
+      evaluatedWords = []
       return
     }
     const canAppend = canAppendEvaluation(evaluatedGameKey, evaluatedWords, gameKey, words)

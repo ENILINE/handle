@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { t } from '~/i18n'
-import { answer, dayNoHanzi, isMobile, parseWord, playMode, testAnswer } from '~/state'
+import { answer, dayNoHanzi, parseWord, playMode, testAnswer, triesRatings } from '~/state'
 import { meta, tries } from '~/storage'
+import { formatRatedShareRow, formatShareGameMode } from '~/eval/presentation'
+
+const props = withDefaults(defineProps<{
+  showEvaluation?: boolean
+}>(), {
+  showEvaluation: false,
+})
 
 const shareHost = computed(() => playMode.value === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
 const dayLabel = computed(() => {
@@ -10,10 +17,12 @@ const dayLabel = computed(() => {
   return t('custom-mode')
 })
 
+const gameModeLabel = computed(() => formatShareGameMode(meta.value.strict, key => t(key)))
+
 const lines = computed(() => {
-  const table = tries.value.map((word) => {
+  const table = tries.value.map((word, index) => {
     const parsed = parseWord(word, answer.value.word)
-    return testAnswer(parsed)
+    const symbols = testAnswer(parsed)
       .map((i, idx) => {
         if (i.char === 'exact')
           return '🟩'
@@ -30,13 +39,19 @@ const lines = computed(() => {
         return '⬜️'
       })
       .join('')
+    return formatRatedShareRow(
+      symbols,
+      triesRatings.value[index],
+      props.showEvaluation,
+      key => t(key),
+    )
   })
 
   return [
     [
       t('name'),
       dayLabel.value,
-      meta.value.strict && meta.value.strict !== 'normal' ? t(`game-mode-${meta.value.strict}`).slice(0, 2) : '',
+      gameModeLabel.value,
       !meta.value.hint ? t('hint-level-none') : '',
     ].filter(Boolean).join(' · '),
     '',
@@ -55,20 +70,24 @@ const share = useShare(computed(() => ({
 const clipboard = useClipboard()
 const copied = ref(false)
 
+watch(text, () => {
+  copied.value = false
+})
+
+async function copyText() {
+  if (!clipboard.isSupported)
+    return
+  await clipboard.copy(text.value)
+  copied.value = true
+}
+
 async function shareSystem() {
-  if (share.isSupported && isMobile) {
+  if (share.isSupported) {
     await share.share()
     return true
   }
   return false
 }
-
-onMounted(async () => {
-  if (clipboard.isSupported) {
-    await clipboard.copy(text.value)
-    copied.value = true
-  }
-})
 </script>
 
 <template>
@@ -82,8 +101,14 @@ onMounted(async () => {
     :rows="lines.length"
     :value="text" readonly
   />
-  <button v-if="share.isSupported" my4 square-btn @click="shareSystem()">
-    <div i-carbon-share />
-    {{ t('share-with-system-api') }}
-  </button>
+  <div flex="~ center wrap" my4>
+    <button v-if="clipboard.isSupported" mx2 square-btn @click="copyText()">
+      <div i-carbon-copy />
+      {{ t('share-copy-text') }}
+    </button>
+    <button v-if="share.isSupported" mx2 square-btn @click="shareSystem()">
+      <div i-carbon-share />
+      {{ t('share-with-system-api') }}
+    </button>
+  </div>
 </template>

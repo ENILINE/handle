@@ -7,6 +7,7 @@ import averageSvg from './assets/average.svg'
 import mistakeSvg from './assets/mistake.svg'
 import incorrectSvg from './assets/incorrect.svg'
 import { t } from '~/i18n'
+import { RATING_LABEL_KEYS } from './presentation'
 
 const props = defineProps<{
   rating: Rating
@@ -21,19 +22,16 @@ const svgMap: Record<Rating, string> = {
   incorrect: incorrectSvg,
 }
 
-const labelMap = {
-  brilliant: 'eval-brilliant',
-  excellent: 'eval-excellent',
-  good: 'eval-good',
-  average: 'eval-average',
-  mistake: 'eval-mistake',
-  incorrect: 'eval-incorrect',
-} as const
+const label = computed(() => t(RATING_LABEL_KEYS[props.rating]))
 </script>
 
 <template>
-  <span flex="~ items-center gap-1" text-xs op80>
+  <span
+    data-eval-badge inline-flex
+    :title="label"
+    role="img"
+    :aria-label="label"
+  >
     <img :src="svgMap[rating]" w="18px" h="18px" alt="">
-    {{ t(labelMap[rating]) }}
   </span>
 </template>

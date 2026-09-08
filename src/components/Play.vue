@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
-import { answer, customOrigin, dayNo, evalDebugTrace, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
-import { gameMode, markStart, meta, showEval, tries, useNoHint } from '~/storage'
+import { answer, customOrigin, dayNo, evalDebugTrace, evaluationEnabled, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
+import { gameMode, markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
-import EvalBadge from '~/eval/Badge.vue'
 
 const el = ref<HTMLInputElement>()
 const input = ref('')
@@ -103,10 +102,14 @@ watchEffect(() => {
 <template>
   <div>
     <div flex="~ col" pt4 items-center>
-      <div v-for="w, i of tries" :key="playMode + '-' + i" flex="~ col items-center">
-        <WordBlocks :word="w" :revealed="true" @click="focus()" />
-        <EvalBadge v-if="showEval && triesRatings[i]" :rating="triesRatings[i]" mt-1 />
-      </div>
+      <WordBlocks
+        v-for="w, i of tries"
+        :key="playMode + '-' + i"
+        :word="w"
+        :revealed="true"
+        :rating="evaluationEnabled ? triesRatings[i] : null"
+        @click="focus()"
+      />
 
       <template v-if="meta.answer">
         <div my4>

@@ -97,4 +97,46 @@ it('persists only resolved ratings and ignores responses from a terminated mode 
     },
   })
   expect(app.evalSessionSnapshot.value.historyLength).toBe(0)
+
+  const randomWorker = workers[1]
+  expect(randomWorker.terminated).toBe(false)
+  storage.tries.value = ['研经铸史']
+  await nextTick()
+  storage.showEval.value = true
+  storage.inputMode.value = 'zy'
+  await nextTick()
+  expect(app.evaluationAvailable.value).toBe(false)
+  expect(app.evaluationEnabled.value).toBe(false)
+  expect(storage.showEval.value).toBe(true)
+  expect(randomWorker.terminated).toBe(true)
+
+  const workerCount = workers.length
+  storage.inputMode.value = 'sp'
+  await nextTick()
+  expect(workers).toHaveLength(workerCount)
+
+  storage.inputMode.value = 'py'
+  await nextTick()
+  expect(app.evaluationAvailable.value).toBe(true)
+  expect(app.evaluationEnabled.value).toBe(true)
+  expect(workers).toHaveLength(workerCount + 1)
+  const restoredWorker = workers.at(-1)!
+  expect((restoredWorker.requests[0] as Extract<EvalWorkerRequest, { type: 'init' }>).guesses.map(guess => guess.word)).toEqual(['研经铸史'])
+
+  storage.showEval.value = false
+  await nextTick()
+  expect(app.evaluationEnabled.value).toBe(false)
+  expect(restoredWorker.terminated).toBe(false)
+
+  storage.gameMode.value = 'strict'
+  await nextTick()
+  expect(app.evaluationAvailable.value).toBe(false)
+  expect(storage.showEval.value).toBe(false)
+  expect(restoredWorker.terminated).toBe(true)
+
+  storage.gameMode.value = 'unlimited'
+  await nextTick()
+  expect(app.evaluationAvailable.value).toBe(true)
+  expect(app.evaluationEnabled.value).toBe(false)
+  expect(workers.at(-1)?.terminated).toBe(false)
 }, 15000)

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { colorblind, frequencyLevel, gameMode, inputMode, meta, playMode, showEval, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
-import { useNumberTone } from '~/state'
+import { evaluationAvailable, evaluationEnabled, useNumberTone } from '~/state'
 import { locale, t } from '~/i18n'
 
 defineProps<{
@@ -83,11 +83,15 @@ defineProps<{
       </button>
       <button
         square-btn m2
-        :class="showEval ? 'text-primary' : 'op80' "
+        :disabled="!evaluationAvailable"
+        :class="[
+          evaluationEnabled ? 'text-primary' : 'op80',
+          !evaluationAvailable ? 'op50 pointer-events-none' : '',
+        ]"
         @click="showEval = !showEval"
       >
         {{ t('eval-in-game') }}
-        <div v-if="showEval" square-btn-mark />
+        <div v-if="evaluationEnabled" square-btn-mark />
       </button>
     </div>
     <div v-if="!lite" flex="~ center wrap">

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { parseWord, parsedAnswer, testAnswer, answer as todayAnswer } from '~/state'
 import { WORD_LENGTH } from '~/logic'
+import type { Rating } from '~/logic/types'
+import EvalBadge from '~/eval/Badge.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -9,6 +11,7 @@ const props = withDefaults(
     answer?: string
     animate?: boolean
     active?: boolean
+    rating?: Rating | null
   }>(), {
     animate: true,
   },
@@ -36,7 +39,7 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div flex>
+  <div flex relative>
     <div
       v-for="c, i in parseWord(word.padEnd(WORD_LENGTH, ' '), answer || todayAnswer.word)" :key="i"
       w-20 h-20 m1
@@ -67,6 +70,11 @@ watchEffect(() => {
         />
       </template>
     </div>
+    <EvalBadge
+      v-if="rating"
+      :rating="rating"
+      absolute top-1 right-1 z-10
+    />
   </div>
 </template>
 

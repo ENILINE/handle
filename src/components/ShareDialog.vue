@@ -1,12 +1,20 @@
 <script setup lang="ts">
-import { showShareDialog } from '~/state'
+import { evaluationAvailable, evaluationEnabled, showShareDialog } from '~/state'
 import { t } from '~/i18n'
 
 const shareType = ref<'text' | 'image' | null>()
+const shareEvaluation = ref(false)
 
 watch(showShareDialog, (v) => {
-  if (!v)
+  if (v)
+    shareEvaluation.value = evaluationEnabled.value
+  else
     shareType.value = null
+})
+
+watch(evaluationAvailable, (available) => {
+  if (!available)
+    shareEvaluation.value = false
 })
 </script>
 
@@ -56,11 +64,21 @@ watch(showShareDialog, (v) => {
       </div>
     </template>
     <template v-if="shareType === 'text'">
-      <ShareText />
-      <SocialLinks />
+      <ShareText :show-evaluation="shareEvaluation" />
     </template>
     <template v-if="shareType === 'image'">
-      <ShareImage />
+      <ShareImage :show-evaluation="shareEvaluation" />
+    </template>
+    <template v-if="shareType">
+      <button
+        v-if="evaluationAvailable"
+        square-btn m2
+        :class="shareEvaluation ? 'text-primary' : 'op80'"
+        @click="shareEvaluation = !shareEvaluation"
+      >
+        {{ t('share-evaluation') }}
+        <div v-if="shareEvaluation" square-btn-mark />
+      </button>
       <SocialLinks />
     </template>
   </div>
