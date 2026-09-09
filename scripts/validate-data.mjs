@@ -38,6 +38,17 @@ for (const row of rows) {
   }
 }
 
+const generatedPinyinPairs = JSON.parse(readFileSync(resolve(projectRoot, 'src/data/pinyin_pairs.json'), 'utf8'))
+const expectedPinyinPairKeys = new Set(rows.flatMap(row =>
+  parseIdiomPinyin(row).map(({ initial, final }) => `${initial}\0${final}`)))
+const generatedPinyinPairKeys = new Set(generatedPinyinPairs.map(([initial, final]) => `${initial}\0${final}`))
+if (generatedPinyinPairs.length !== generatedPinyinPairKeys.size)
+  throw new Error('Generated pinyin pair table contains duplicates')
+if (generatedPinyinPairKeys.size !== expectedPinyinPairKeys.size
+  || [...expectedPinyinPairKeys].some(key => !generatedPinyinPairKeys.has(key))) {
+  throw new Error('Generated pinyin pair table does not match the canonical source')
+}
+
 const index = JSON.parse(readFileSync(resolve(projectRoot, 'src/data/idiom_index.json'), 'utf8'))
 const explanationWords = new Set()
 const explanationDir = resolve(projectRoot, 'public/idiom-data')
@@ -142,5 +153,6 @@ if (JSON.stringify(sampledWords) !== JSON.stringify(expectedSampledWords))
 
 console.log(`Validated ${rows.length} canonical idioms`)
 console.log(`Runtime split: ${plainWords.length} default pinyin, ${Object.keys(polyphones).length} overrides`)
+console.log(`Legal initial-final pairs: ${generatedPinyinPairKeys.size}`)
 console.log(`Explanation entries: ${explanationWords.size}; verified evaluation tuples: ${evalRowCount}`)
 console.log(`Evaluation corpus version: ${generatedCorpusVersion}`)

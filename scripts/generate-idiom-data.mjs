@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import { mkdirSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { compareWords, projectRoot, readIdiomSource } from './lib/idiom-source.mjs'
+import { FINALS, INITIALS, compareWords, parseIdiomPinyin, projectRoot, readIdiomSource } from './lib/idiom-source.mjs'
 
 const require = createRequire(import.meta.url)
 const pinyin = require('pinyin/lib/web-pinyin.js')
@@ -26,6 +26,28 @@ writeFileSync(resolve(projectRoot, 'src/data/idioms.txt'), plainWords.join('\n')
 writeFileSync(
   resolve(projectRoot, 'src/data/polyphones.json'),
   JSON.stringify(Object.fromEntries(polyphones), null, 2),
+  'utf8',
+)
+
+const syllablePairKeys = new Set()
+for (const row of rows) {
+  for (const { initial, final } of parseIdiomPinyin(row))
+    syllablePairKeys.add(`${initial}\0${final}`)
+}
+const initialOrder = new Map(INITIALS.map((value, index) => [value, index]))
+const finalOrder = new Map(FINALS.map((value, index) => [value, index]))
+const syllablePairs = [...syllablePairKeys]
+  .map((key) => {
+    const [initial, final] = key.split('\0')
+    return [initial, final]
+  })
+  .sort(([initialA, finalA], [initialB, finalB]) =>
+    initialOrder.get(initialA) - initialOrder.get(initialB)
+    || finalOrder.get(finalA) - finalOrder.get(finalB))
+
+writeFileSync(
+  resolve(projectRoot, 'src/data/pinyin_pairs.json'),
+  `${JSON.stringify(syllablePairs)}\n`,
   'utf8',
 )
 
@@ -96,4 +118,5 @@ const explanationBytes = readdirSync(outputDir)
   .reduce((total, file) => total + statSync(resolve(outputDir, file)).size, 0)
 
 console.log(`Generated ${plainWords.length} default-pinyin idioms and ${polyphones.length} overrides`)
+console.log(`Generated ${syllablePairs.length} legal initial-final pairs`)
 console.log(`Generated ${rows.length} explanations in ${buckets.length} files (${explanationBytes} bytes)`)
