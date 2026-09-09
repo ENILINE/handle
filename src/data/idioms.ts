@@ -23,7 +23,7 @@ async function loadFile(bucketId: string): Promise<IdiomDataFile> {
 // Add entries here when you need to quickly add or fix an idiom's explanation data.
 const overrides: Record<string, IdiomInfo> = {
   // Example:
-  // '一心一意': { pinyin: 'yi1 xin1 yi1 yi4', explanation: '...', derivation: '...', example: '...' },
+  // '一心一意': { explanation: '...', derivation: '...', example: '...' },
 }
 
 export async function getIdiomInfo(word: string): Promise<IdiomInfo | undefined> {
