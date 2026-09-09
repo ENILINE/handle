@@ -908,7 +908,7 @@ r,&r\le0.70\\
 
 ## 13. 预处理数据与校准
 
-数据由 `scripts/generate-eval-data.mjs` 从 `playground/idioms.jsonl` 生成到 `src/eval/data.ts`。
+数据由 `scripts/generate-eval-data.mjs` 从项目唯一成语数据源 `data/idioms.jsonl` 生成到 `src/eval/data.ts`。
 
 ### 13.1 语料和紧凑表示
 
@@ -1224,7 +1224,10 @@ ESS=\frac{(\sum_i u_i)^2}{\sum_i u_i^2}
 | `src/eval/Badge.vue` | 评价徽章 UI |
 | `src/eval/presentation.ts` | 可用性、评级文案、文字行与图片缓存键等展示规则 |
 | `src/eval/assets/*.svg` | 六档评价图标 |
-| `scripts/generate-eval-data.mjs` | 从 `idioms.jsonl` 生成评价数据 |
+| `data/idioms.jsonl` | 成语、规范拼音和解释的唯一人工维护数据源 |
+| `scripts/generate-idiom-data.mjs` | 生成运行时词表、拼音覆盖表和解释分片 |
+| `scripts/generate-eval-data.mjs` | 从唯一数据源生成评价数据 |
+| `scripts/validate-data.mjs` | 校验唯一数据源及全部派生数据的一致性 |
 | `src/state.ts` | 游戏会话接入、异步结果校验和评级持久化 |
 
 ## 19. 测试重点

@@ -14,16 +14,18 @@ A Chinese Hanzi variation of [Wordle](https://www.powerlanguage.co.uk/wordle/). 
 - Run `pnpm install`
 - Run `pnpm dev` and visit `http://localhost:4444`
 
-<!-- ## 成语勘误
+## 成语数据
 
-成语数据库储存于
+项目唯一需要人工维护的成语数据库是 [data/idioms.jsonl](./data/idioms.jsonl)，其中包含成语、数字声调拼音、解释、出处和示例。
 
-- [./src/data/idioms.txt](./src/data/idioms.txt) - 已知的成语列表
-- [./src/data/polyphones.json](./src/data/polyphones.json) - 特殊发音的成语列表
+修改数据后运行：
 
-二者互不包含。
+```bash
+pnpm data:build
+pnpm data:check
+```
 
-如遇到成语缺失或发音错误，请编辑 [./src/data/new.txt](./src/data/new.txt) 文件，一行一词，完成后执行 `pnpm run update` 命令，脚本会自动抓取 [汉典](https://www.zdic.net/) 的数据更新成语数据库。如遇汉典中也缺失的成语，其会留存在 new.txt 中，需要手动判断与添加。 -->
+`src/data/idioms.txt`、`src/data/polyphones.json`、`public/idiom-data/*.json` 和 `src/eval/data.ts` 均为生成文件，不应直接修改。详细说明见 [data/README.md](./data/README.md)。
 
 ## Tech Stack
 

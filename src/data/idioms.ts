@@ -19,18 +19,7 @@ async function loadFile(bucketId: string): Promise<IdiomDataFile> {
   return data
 }
 
-// Manual overrides for one-off additions without rebuilding the whole dataset.
-// Add entries here when you need to quickly add or fix an idiom's explanation data.
-const overrides: Record<string, IdiomInfo> = {
-  // Example:
-  // '一心一意': { explanation: '...', derivation: '...', example: '...' },
-}
-
 export async function getIdiomInfo(word: string): Promise<IdiomInfo | undefined> {
-  const override = overrides[word]
-  if (override)
-    return override
-
   const bucketId = (index as IndexData)[word[0]]
   if (!bucketId)
     return undefined
@@ -46,10 +35,6 @@ export async function getIdiomInfo(word: string): Promise<IdiomInfo | undefined>
 }
 
 export function getIdiomInfoSync(word: string): IdiomInfo | undefined {
-  const override = overrides[word]
-  if (override)
-    return override
-
   const bucketId = (index as IndexData)[word[0]]
   if (!bucketId)
     return undefined

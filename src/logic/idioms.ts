@@ -4,6 +4,7 @@ import IdiomsRaw from '../data/idioms.txt?raw'
 
 export const IdiomsList = IdiomsRaw.split('\n').map(i => i.trim()).filter(Boolean)
 export const Polyphones = PolyphonesRaw as Record<string, string>
+const idioms = new Set(IdiomsList)
 
 export function getIdiom(word: string): [string, string | undefined] | undefined {
   const simplified = toSimplified(word)
@@ -11,9 +12,9 @@ export function getIdiom(word: string): [string, string | undefined] | undefined
     return [word, Polyphones[word]]
   if (Polyphones[simplified])
     return [word, Polyphones[simplified]]
-  if (IdiomsList.includes(word))
+  if (idioms.has(word))
     return [word, undefined]
-  if (IdiomsList.includes(simplified))
+  if (idioms.has(simplified))
     return [simplified, undefined]
   return undefined
 }

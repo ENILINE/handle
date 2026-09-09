@@ -1,22 +1,10 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { FINALS, INITIALS, parseIdiomPinyin, readIdiomSource } from './lib/idiom-source.mjs'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
-const jsonlPath = resolve(scriptDir, '../playground/idioms.jsonl')
 const outputPath = resolve(scriptDir, '../src/eval/data.ts')
-
-const INITIALS = [
-  'null', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h',
-  'j', 'q', 'x', 'r', 'z', 'c', 's', 'zh', 'ch', 'sh', 'y', 'w',
-]
-
-const FINALS = [
-  'a', 'ai', 'an', 'ang', 'ao', 'e', 'ei', 'en', 'eng', 'er',
-  'i', 'ia', 'ian', 'iang', 'iao', 'ie', 'in', 'ing', 'iong', 'iu',
-  'o', 'ong', 'ou', 'u', 'ua', 'uai', 'uan', 'uang', 'ue', 'ui',
-  'un', 'uo', 'v', 've',
-]
 
 const INITIAL_BITS = 5
 const FINAL_BITS = 6
@@ -31,19 +19,6 @@ const SIGNATURE_WEIGHT_MAX = 16
 
 const initialIndex = new Map(INITIALS.map((value, index) => [value, index]))
 const finalIndex = new Map(FINALS.map((value, index) => [value, index]))
-
-function splitPinyin(syllable) {
-  const base = syllable.replace(/[\d]$/, '')
-  const initials = [
-    'zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l',
-    'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's', 'w', 'y',
-  ]
-  for (const initial of initials) {
-    if (base.startsWith(initial))
-      return [initial, base.slice(initial.length)]
-  }
-  return ['null', base]
-}
 
 function packTuple(values, bits) {
   let packed = 0
@@ -95,10 +70,15 @@ function mulberry32(seed) {
   }
 }
 
-const rows = readFileSync(jsonlPath, 'utf8')
-  .trim()
-  .split(/\r?\n/)
-  .map(line => JSON.parse(line))
+const rows = readIdiomSource().map((source) => {
+  const parsed = parseIdiomPinyin(source)
+  return {
+    word: Array.from(source.word),
+    initial: parsed.map(value => value.initial),
+    final: parsed.map(value => value.final),
+    tone: parsed.map(value => value.tone),
+  }
+})
 
 const initialTuples = new Uint32Array(rows.length)
 const finalTuples = new Uint32Array(rows.length)
@@ -112,13 +92,6 @@ for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
   const row = rows[rowIndex]
   if (row.initial.length !== 4 || row.final.length !== 4 || row.tone.length !== 4 || row.word.length !== 4)
     throw new Error(`Invalid idiom row ${rowIndex}`)
-
-  for (let position = 0; position < 4; position++) {
-    const reconstructed = `${row.initial[position] === 'null' ? '' : row.initial[position]}${row.final[position]}${row.tone[position]}`
-    const parsed = splitPinyin(reconstructed)
-    if (parsed[0] !== row.initial[position] || parsed[1] !== row.final[position])
-      throw new Error(`Pinyin convention mismatch in ${row.word.join('')} at position ${position}`)
-  }
 
   const initials = row.initial.map((value) => {
     const index = initialIndex.get(value)
