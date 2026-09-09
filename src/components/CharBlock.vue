@@ -2,6 +2,7 @@
 import type { MatchResult, MatchType, ParsedChar } from '~/logic/types'
 import { inputMode, useCheckAssist } from '~/storage'
 import { getSymbolState, useMask, useNumberTone } from '~/state'
+import { displayFinalWithTone } from '~/logic/pinyin-display'
 
 const props = defineProps<{
   char?: ParsedChar
@@ -81,11 +82,12 @@ const vLocation = computed(() => {
 
 const partTwo = computed(() => {
   const two = (props.char?._2 || '')
-  const index = toneCharLocation.value
-  // replace i with dot less for tone symbol
-  if (!useNumberTone.value && two[index] === 'i')
-    return `${two.slice(0, index)}ı${two.slice(index + 1)}`
-  return two
+  return displayFinalWithTone(
+    two,
+    toneCharLocation.value,
+    props.char?.tone || 0,
+    useNumberTone.value,
+  )
 })
 </script>
 

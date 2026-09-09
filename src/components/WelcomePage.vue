@@ -2,6 +2,7 @@
 import { isDark, showHelp, showVariants, useMask } from '~/state'
 import { initialized, inputMode } from '~/storage'
 import { t } from '~/i18n'
+import { getIdiomFeedbackUrl } from '~/logic/feedback'
 
 function start() {
   showHelp.value = false
@@ -14,6 +15,7 @@ function variantButton() {
 }
 
 const final = computed(() => ({ py: 'uo', zy: 'ㄨㄛ', sp: 'o' }[inputMode.value]))
+const idiomFeedbackUrl = getIdiomFeedbackUrl()
 </script>
 
 <template>
@@ -70,7 +72,10 @@ const final = computed(() => ({ py: 'uo', zy: 'ㄨㄛ', sp: 'o' }[inputMode.valu
     <Settings :lite="true" />
 
     <div h-1px w-10 border="b base" m4 />
-
+    <a :href="idiomFeedbackUrl" target="_blank" rel="noopener noreferrer" flex="~ center gap-1" op50 hover:op80>
+      <div i-carbon-warning-alt />
+      {{ t('idiom-feedback') }}
+    </a>
     <div h-1px w-10 border="b base" m4 />
     <button text-primary op80 hover:op100 @click="variantButton()">
       {{ t('other-variants') }}

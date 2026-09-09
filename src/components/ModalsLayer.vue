@@ -8,6 +8,7 @@ import {
   showCustomShare,
   showDashboard,
   showFailed,
+  showGiveUp,
   showHelp,
   showHint,
   showIdiomExplanation,
@@ -32,6 +33,9 @@ const lg = breakpoints.lg
   </Modal>
   <Modal v-model="showFailed" direction="top">
     <FailedPage />
+  </Modal>
+  <Modal v-model="showGiveUp" direction="top">
+    <GiveUpPage />
   </Modal>
   <Modal v-model="showDashboard" direction="top">
     <Dashboard />

@@ -18,6 +18,7 @@ declare module '@vue/runtime-core' {
     DashboardItem: typeof import('./src/components/DashboardItem.vue')['default']
     FailedPage: typeof import('./src/components/FailedPage.vue')['default']
     FeedbackLinks: typeof import('./src/components/FeedbackLinks.vue')['default']
+    GiveUpPage: typeof import('./src/components/GiveUpPage.vue')['default']
     Hint: typeof import('./src/components/Hint.vue')['default']
     IdiomExplanation: typeof import('./src/components/IdiomExplanation.vue')['default']
     Modal: typeof import('./src/components/Modal.vue')['default']

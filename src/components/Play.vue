@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
-import { answer, customOrigin, dayNo, evalDebugTrace, evaluationEnabled, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
+import { activeGameMode, answer, customOrigin, dayNo, evalDebugTrace, evaluationEnabled, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showGiveUp, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
 import { gameMode, markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
@@ -21,6 +21,9 @@ const hintHidden = computed(() => {
   }
   return false
 })
+
+const canGiveUp = computed(() => activeGameMode.value === 'strict'
+  && !(playMode.value === 'custom' && customOrigin.value === 'own'))
 
 function enter() {
   if (input.value.length !== WORD_LENGTH)
@@ -175,6 +178,11 @@ watchEffect(() => {
           <div flex="~ center" mt4 :class="isFinished ? 'op0! pointer-events-none' : ''">
             <button v-if="!useNoHint && !hintHidden" mx2 icon-btn text-base pb2 gap-1 flex="~ center" @click="hintFn()">
               <div i-carbon-idea /> {{ t('hint') }}
+            </button>
+            <!-- Deliberately remains available after ten guesses: isFailed is
+                 the existing soft limit and does not finish the game. -->
+            <button v-if="canGiveUp" mx2 icon-btn text-base pb2 gap-1 flex="~ center" @click="showGiveUp = true">
+              <div i-carbon-flag /> {{ t('give-up') }}
             </button>
             <button mx2 icon-btn text-base pb2 gap-1 flex="~ center" @click="sheet()">
               <div i-carbon-grid /> {{ t('cheatsheet') }}

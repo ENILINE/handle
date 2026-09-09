@@ -8,6 +8,12 @@ export type PlayMode = 'daily' | 'random' | 'custom'
 
 export type FrequencyLevel = 'common' | 'normal' | 'rare'
 
+export interface StoredRandomAnswer {
+  word: string
+  hint: string
+  frequency: FrequencyLevel
+}
+
 export interface CustomPayload {
   a: string
   s: 'own' | 'shared'
@@ -50,6 +56,7 @@ export interface TriesMeta {
   strict?: GameMode
   sent?: boolean
   ratings?: Array<Rating | null>
+  randomAnswer?: StoredRandomAnswer
   /** Numeric values are retained only so old localStorage records can be read and invalidated. */
   ratingsVersion?: number | string
 }

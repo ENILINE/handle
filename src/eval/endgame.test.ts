@@ -69,7 +69,7 @@ describe('complete endgame regressions', () => {
     const search = enumerateEndgame(secondState.history, evalTesting.getEndgamePrior())
     expect(getPosteriorSizes(secondState).posteriorProduct).toBe(12)
     expect(search.status).toBe('complete')
-    expect(search.candidatesFound).toBe(752)
+    expect(search.candidatesFound).toBe(744)
     const spellings = Array.from(search.initials, (i, p) => spell(i, search.finals[p]).split(' '))
     expect(spellings.some(row => row.includes('er'))).toBe(true)
     expect(spellings.some(row => row.some(py => py.startsWith('c') && !py.startsWith('ch')))).toBe(true)

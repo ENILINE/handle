@@ -3,6 +3,7 @@ import { filterNonChineseChars } from '@hankit/tools'
 import type { IdiomInfo } from '~/data/idioms'
 import { getIdiomInfo, getIdiomInfoSync } from '~/data/idioms'
 import { getPinyin } from '~/logic/idioms'
+import { getIdiomFeedbackUrl } from '~/logic/feedback'
 import { showIdiomExplanation } from '~/state'
 import { t } from '~/i18n'
 
@@ -79,9 +80,7 @@ const hasExplanation = computed(() => hasContent(info.value?.explanation))
 const hasDerivation = computed(() => hasContent(info.value?.derivation))
 const hasExample = computed(() => hasContent(info.value?.example))
 const notFound = computed(() => !loading.value && !error.value && searchWord.value.length === 4 && !hasExplanation.value)
-const feedbackUrl = computed(() =>
-  `https://github.com/ENILINE/handle/issues/new?title=成语数据错误：${searchWord.value}&labels=数据纠错`,
-)
+const feedbackUrl = computed(() => getIdiomFeedbackUrl(searchWord.value))
 </script>
 
 <template>
@@ -147,6 +146,7 @@ const feedbackUrl = computed(() =>
         mt4 text-sm op50
         :href="feedbackUrl"
         target="_blank"
+        rel="noopener noreferrer"
       >{{ t('idiom-feedback') }}</a>
     </div>
   </div>

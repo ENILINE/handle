@@ -23,6 +23,7 @@ export const showSettings = ref(false)
 export const showHelp = ref(false)
 export const showShare = ref(false)
 export const showFailed = ref(false)
+export const showGiveUp = ref(false)
 export const showDashboard = ref(false)
 export const showVariants = ref(false)
 export const showCheatSheet = ref(false)
@@ -38,6 +39,7 @@ export const isSwitchingMode = ref(false)
 watch(playMode, (v) => {
   _playMode.value = v
   useMask.value = false
+  showGiveUp.value = false
   isSwitchingMode.value = true
   nextTick(() => { isSwitchingMode.value = false })
 })
@@ -47,20 +49,43 @@ watch(_playMode, (v) => {
 
 export const randomSeed = ref(0)
 
+function generateRandomGame() {
+  const generated = getRandomAnswer(frequencyLevel.value)
+  randomMeta.value = {
+    randomAnswer: {
+      ...generated,
+      frequency: frequencyLevel.value,
+    },
+  }
+  return generated
+}
+
+function restoreRandomGame() {
+  const stored = randomMeta.value.randomAnswer
+  if (stored?.word && stored.frequency === frequencyLevel.value)
+    return
+
+  // Older versions persisted guesses without their answer. Those guesses
+  // cannot be recovered safely, so start one internally consistent round.
+  generateRandomGame()
+}
+
+restoreRandomGame()
+export const randomAnswer = computed(() => {
+  const stored = randomMeta.value.randomAnswer
+  return stored
+    ? { word: stored.word, hint: stored.hint }
+    : { word: '', hint: '' }
+})
+
 export function newRandomGame() {
-  randomMeta.value = {}
+  generateRandomGame()
   randomSeed.value++
 }
 
 watch(frequencyLevel, () => {
   if (playMode.value === 'random')
     newRandomGame()
-})
-
-export const randomAnswer = computed(() => {
-  // eslint-disable-next-line no-unused-expressions
-  randomSeed.value // dependency: regenerates when randomSeed changes
-  return getRandomAnswer(frequencyLevel.value)
 })
 
 export const useNumberTone = computed(() => {
@@ -152,6 +177,15 @@ export function parseWord(word: string, _ans: string = answer.value?.word || '',
 
 export function testAnswer(word: ParsedChar[], ans = parsedAnswer.value) {
   return _testAnswer(word, ans)
+}
+
+export function revealAnswerAsFailure() {
+  showFailed.value = false
+  showGiveUp.value = false
+  if (meta.value.strict == null)
+    meta.value.strict = _gameMode.value
+  meta.value.answer = true
+  meta.value.failed = true
 }
 
 export const parsedTries = computed(() => {
