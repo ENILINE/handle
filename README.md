@@ -25,7 +25,7 @@ pnpm data:build
 pnpm data:check
 ```
 
-`src/data/idioms.txt`、`src/data/polyphones.json`、`public/idiom-data/*.json` 和 `src/eval/data.ts` 均为生成文件，不应直接修改。详细说明见 [data/README.md](./data/README.md)。
+`src/data/idioms.txt`、`src/data/polyphones.json`、`public/idiom-data/*.json`、`src/eval/data.ts` 和 `src/eval/corpus-version.ts` 均为生成文件，不应直接修改。详细说明见 [data/README.md](./data/README.md)。
 
 ## Tech Stack
 

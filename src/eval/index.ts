@@ -6,7 +6,13 @@ import { ENDGAME_PRODUCT_LIMIT, createEndgamePrior, enumerateEndgame } from './e
 import type { EndgameBudget, EndgamePrior, EndgameSearch, PinyinHistoryEntry } from './endgame'
 import { higherRating, matchesAllFeedback, specialRatingForGuess } from './rating'
 import type { VisibleGuess } from './rating'
-export { EVAL_VERSION, canAppendEvaluation, canReuseRatings } from './version'
+export {
+  EVAL_ALGORITHM_VERSION,
+  EVAL_CORPUS_VERSION,
+  EVAL_VERSION,
+  canAppendEvaluation,
+  canReuseRatings,
+} from './version'
 export { feedbackCode, pinyinFeedbackCode } from './feedback'
 import {
   CALIBRATION_SEED,

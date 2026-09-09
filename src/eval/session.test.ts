@@ -99,7 +99,7 @@ it('isolates modes, reconstructs persisted information and handles replaced same
   expect(app.evalSessionSnapshot.value.information).toEqual(expectedInformation('举一反三', ['搭搭撒撒']))
   expect(storage.meta.value.ratings![0]).not.toBe(oldRating)
 
-  // V4 records require V5 re-evaluation, not just information replay.
+  // Legacy numeric records require composite-version re-evaluation, not just information replay.
   app.playMode.value = 'daily'
   await nextTick()
   storage.customMeta.value = { tries: ['研经铸史'], ratings: ['incorrect'], ratingsVersion: 4 }

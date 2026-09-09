@@ -8,6 +8,8 @@ import {
   createEvalState,
   canAppendEvaluation,
   canReuseRatings,
+  EVAL_ALGORITHM_VERSION,
+  EVAL_CORPUS_VERSION,
   EVAL_VERSION,
   evalTesting,
   evaluate,
@@ -253,7 +255,9 @@ describe('joint posterior diagnostics', () => {
   it('uses joint state for V3 and invalidates the previous persisted version', () => {
     const diagnostic = createEvalState()
     expect(diagnostic.diagnostics).toBeDefined()
-    expect(EVAL_VERSION).toBe(5)
+    expect(EVAL_ALGORITHM_VERSION).toBe(5)
+    expect(EVAL_CORPUS_VERSION).toMatch(/^[0-9a-f]{16}$/)
+    expect(EVAL_VERSION).toBe(`5:${EVAL_CORPUS_VERSION}`)
     expect(canReuseRatings(4, 2, 2)).toBe(false)
   })
 
@@ -380,9 +384,10 @@ describe('evaluation session reconciliation', () => {
       .toBe(false)
   })
 
-  it('invalidates V1 ratings and mismatched restored arrays', () => {
+  it('invalidates legacy versions and mismatched restored arrays', () => {
     expect(canReuseRatings(undefined, 2, 2)).toBe(false)
-    expect(canReuseRatings(EVAL_VERSION - 1, 2, 2)).toBe(false)
+    expect(canReuseRatings(`4:${EVAL_CORPUS_VERSION}`, 2, 2)).toBe(false)
+    expect(canReuseRatings(5, 2, 2)).toBe(false)
     expect(canReuseRatings(EVAL_VERSION, 1, 2)).toBe(false)
     expect(canReuseRatings(EVAL_VERSION, 2, 2)).toBe(true)
   })

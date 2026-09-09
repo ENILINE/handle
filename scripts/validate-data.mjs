@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { createEvalCorpusVersion } from './lib/eval-corpus-version.mjs'
 import { FINALS, INITIALS, compareWords, parseIdiomPinyin, projectRoot, readIdiomSource } from './lib/idiom-source.mjs'
 
 const require = createRequire(import.meta.url)
@@ -63,6 +64,15 @@ const evalData = readFileSync(resolve(projectRoot, 'src/eval/data.ts'), 'utf8')
 const evalRowCount = Number(evalData.match(/export const EVAL_ROW_COUNT = (\d+)/)?.[1])
 if (evalRowCount !== rows.length)
   throw new Error(`Evaluation/source count mismatch: ${evalRowCount}/${rows.length}`)
+
+const corpusVersionSource = readFileSync(resolve(projectRoot, 'src/eval/corpus-version.ts'), 'utf8')
+const generatedCorpusVersion = corpusVersionSource.match(/export const EVAL_CORPUS_VERSION = '([0-9a-f]{16})'/)?.[1]
+const expectedCorpusVersion = createEvalCorpusVersion(rows)
+if (generatedCorpusVersion !== expectedCorpusVersion) {
+  throw new Error(
+    `Evaluation corpus version mismatch: ${generatedCorpusVersion || 'missing'}/${expectedCorpusVersion}; run pnpm data:build`,
+  )
+}
 
 function readBase64Export(name) {
   const value = evalData.match(new RegExp(`export const ${name} = '([^']+)'`))?.[1]
@@ -133,3 +143,4 @@ if (JSON.stringify(sampledWords) !== JSON.stringify(expectedSampledWords))
 console.log(`Validated ${rows.length} canonical idioms`)
 console.log(`Runtime split: ${plainWords.length} default pinyin, ${Object.keys(polyphones).length} overrides`)
 console.log(`Explanation entries: ${explanationWords.size}; verified evaluation tuples: ${evalRowCount}`)
+console.log(`Evaluation corpus version: ${generatedCorpusVersion}`)

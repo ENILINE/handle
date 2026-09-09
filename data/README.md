@@ -11,6 +11,7 @@
 - `src/data/idiom_index.json`
 - `public/idiom-data/*.json`
 - `src/eval/data.ts`
+- `src/eval/corpus-version.ts`
 
 修改数据源后运行：
 
@@ -21,4 +22,4 @@ pnpm data:check
 
 生成器会把与当前 `pinyin` 模块输出一致的成语写入 `idioms.txt`，只把读音不同的成语写入 `polyphones.json`。
 
-新增、删除成语或修改拼音会改变评价语料。提交这类变化时应检查 `src/eval/data.ts` 的差异，并相应提升 `EVAL_VERSION`，使已有持久化评价失效。
+新增、删除成语或修改拼音会改变评价语料。`data:build` 会据此自动生成 `src/eval/corpus-version.ts` 中的语料指纹，并与人工维护的算法版本共同组成 `EVAL_VERSION`，使旧的持久化评价自动失效。只修改解释、出处或示例不会改变评价语料指纹。

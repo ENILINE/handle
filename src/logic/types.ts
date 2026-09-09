@@ -50,5 +50,6 @@ export interface TriesMeta {
   strict?: GameMode
   sent?: boolean
   ratings?: Array<Rating | null>
-  ratingsVersion?: number
+  /** Numeric values are retained only so old localStorage records can be read and invalidated. */
+  ratingsVersion?: number | string
 }
