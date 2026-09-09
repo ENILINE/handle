@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import confetti from 'canvas-confetti'
 import { isPassed, isSwitchingMode } from '~/state'
+import { disableAnimations } from '~/storage'
 
 function congrats() {
+  if (disableAnimations.value)
+    return
+
   const defaults = {
     colors: [
       '#5D8C7B',
@@ -41,7 +45,7 @@ function congrats() {
 }
 
 watch(isPassed, (v) => {
-  if (v && !isSwitchingMode.value)
+  if (v && !isSwitchingMode.value && !disableAnimations.value)
     setTimeout(congrats, 300)
 }, { flush: 'post' })
 </script>

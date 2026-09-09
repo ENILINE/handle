@@ -13,6 +13,7 @@ export const colorblind = useStorage('handle-colorblind', false)
 export const useNoHint = useStorage('handle-hard-mode', false)
 export const useCheckAssist = useStorage('handle-check-assist', false)
 export const showEval = useStorage('handle-show-eval', true)
+export const disableAnimations = useStorage('handle-disable-animations', false)
 export const useNumberTone = useStorage('handle-number-tone', true)
 export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
 

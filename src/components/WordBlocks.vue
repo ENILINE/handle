@@ -3,6 +3,7 @@ import { parseWord, parsedAnswer, testAnswer, answer as todayAnswer } from '~/st
 import { WORD_LENGTH } from '~/logic'
 import type { Rating } from '~/logic/types'
 import EvalBadge from '~/eval/Badge.vue'
+import { disableAnimations } from '~/storage'
 
 const props = withDefaults(
   defineProps<{
@@ -45,7 +46,7 @@ watchEffect(() => {
       w-20 h-20 m1
       class="tile" :class="[flip ? 'revealed' : '']"
     >
-      <template v-if="animate">
+      <template v-if="animate && !disableAnimations">
         <CharBlock
           class="front"
           :char="c"

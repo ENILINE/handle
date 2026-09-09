@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { colorblind, frequencyLevel, gameMode, inputMode, meta, playMode, showEval, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
+import { colorblind, disableAnimations, frequencyLevel, gameMode, inputMode, meta, playMode, showEval, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
 import { activeGameMode, evaluationAvailable, evaluationEnabled, useNumberTone } from '~/state'
 import { locale, t } from '~/i18n'
 
@@ -34,6 +34,14 @@ function setGameMode(mode: typeof gameMode.value) {
       >
         {{ t('colorblind-mode') }}
         <div v-if="colorblind" square-btn-mark />
+      </button>
+      <button
+        square-btn m2
+        :class="disableAnimations ? 'text-primary' : 'op80'"
+        @click="disableAnimations = !disableAnimations"
+      >
+        {{ t('disable-animations') }}
+        <div v-if="disableAnimations" square-btn-mark />
       </button>
     </div>
     <div flex="~ center wrap">
