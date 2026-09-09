@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { colorblind, frequencyLevel, gameMode, inputMode, meta, playMode, showEval, spMode, useCheckAssist, useNoHint, useNumberTone as useNumberToneRaw } from '~/storage'
-import { evaluationAvailable, evaluationEnabled, useNumberTone } from '~/state'
+import { activeGameMode, evaluationAvailable, evaluationEnabled, useNumberTone } from '~/state'
 import { locale, t } from '~/i18n'
 
 defineProps<{
   lite?: boolean
 }>()
+
+const gameModeLocked = computed(() => !!meta.value.tries?.length)
+
+function setGameMode(mode: typeof gameMode.value) {
+  if (!gameModeLocked.value)
+    gameMode.value = mode
+}
 </script>
 
 <template>
@@ -97,25 +104,28 @@ defineProps<{
     <div v-if="!lite" flex="~ center wrap">
       <div
         square-btn m2
-        :class="!!meta.tries?.length ? 'op50 pointer-events-none' : ''"
+        :class="gameModeLocked ? 'op50 pointer-events-none' : ''"
       >
         <button
-          :class="gameMode === 'unlimited' ? 'text-primary' : 'op80'"
-          @click="gameMode = 'unlimited'"
+          :disabled="gameModeLocked"
+          :class="activeGameMode === 'unlimited' ? 'text-primary' : 'op80'"
+          @click="setGameMode('unlimited')"
         >
           {{ t('game-mode-unlimited') }}
         </button>
         <div w-1px h-4 border="r base" />
         <button
-          :class="gameMode === 'normal' ? 'text-primary' : 'op80'"
-          @click="gameMode = 'normal'"
+          :disabled="gameModeLocked"
+          :class="activeGameMode === 'normal' ? 'text-primary' : 'op80'"
+          @click="setGameMode('normal')"
         >
           {{ t('game-mode-normal') }}
         </button>
         <div w-1px h-4 border="r base" />
         <button
-          :class="gameMode === 'strict' ? 'text-primary' : 'op80'"
-          @click="gameMode = 'strict'"
+          :disabled="gameModeLocked"
+          :class="activeGameMode === 'strict' ? 'text-primary' : 'op80'"
+          @click="setGameMode('strict')"
         >
           {{ t('game-mode-strict') }}
         </button>

@@ -73,7 +73,12 @@ it('isolates modes, reconstructs persisted information and handles replaced same
   expect(app.evalSessionSnapshot.value.information).toEqual(dailyInfo)
 
   const randomWords = [...dailyWords.slice(0, 4), '生不逢时']
-  storage.randomMeta.value = { tries: randomWords, ratings: randomWords.map(() => 'good'), ratingsVersion: EVAL_VERSION }
+  storage.randomMeta.value = {
+    ...storage.randomMeta.value,
+    tries: randomWords,
+    ratings: randomWords.map(() => 'good'),
+    ratingsVersion: EVAL_VERSION,
+  }
   app.playMode.value = 'random'
   await nextTick()
   await waitForEvaluation(app, storage, 5)

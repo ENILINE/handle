@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { GameMode } from '~/logic/types'
-import { answer, isPassed, showCustomShare } from '~/state'
+import { activeGameMode, answer, isPassed, showCustomShare } from '~/state'
 import { gameMode, tries as triesRef } from '~/storage'
 import { t } from '~/i18n'
 import { encodeCustom } from '~/logic/encode'
@@ -20,6 +20,7 @@ const allTries = computed(() => {
 })
 
 const hasTries = computed(() => allTries.value.length > 0)
+const hasSubmittedTries = computed(() => triesRef.value.length > 0)
 
 function initSelection() {
   selectedTries.value = allTries.value.map(() => false)
@@ -27,7 +28,7 @@ function initSelection() {
 
 watch(showCustomShare, (v) => {
   if (v) {
-    shareMode.value = gameMode.value
+    shareMode.value = hasSubmittedTries.value ? activeGameMode.value : gameMode.value
     hintChar.value = ''
     invalidHint.value = false
     copied.value = false
@@ -101,7 +102,7 @@ function copyLink() {
     </p>
 
     <!-- Mode selector (only before first guess) -->
-    <div v-if="!hasTries">
+    <div v-if="!hasSubmittedTries">
       <div square-btn>
         <button :class="shareMode === 'unlimited' ? 'text-primary' : 'op80'" @click="shareMode = 'unlimited'">
           {{ t('game-mode-unlimited') }}

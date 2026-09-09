@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
 import { activeGameMode, answer, customOrigin, dayNo, evalDebugTrace, evaluationEnabled, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showGiveUp, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
-import { gameMode, markStart, meta, tries, useNoHint } from '~/storage'
+import { markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
 
@@ -29,14 +29,16 @@ function enter() {
   if (input.value.length !== WORD_LENGTH)
     return
 
-  if (gameMode.value !== 'unlimited' && !checkValidIdiom(input.value)) {
+  const mode = activeGameMode.value
+
+  if (mode !== 'unlimited' && !checkValidIdiom(input.value)) {
     toastKey.value = 'invalid-idiom'
     showToast.value = true
     shake.value = true
     return
   }
 
-  if (gameMode.value !== 'unlimited') {
+  if (mode !== 'unlimited') {
     const simplifiedInput = toSimplified(input.value)
     if (tries.value.some(t => toSimplified(t) === simplifiedInput)) {
       toastKey.value = 'duplicate-guess'
@@ -47,9 +49,9 @@ function enter() {
   }
 
   if (meta.value.strict == null)
-    meta.value.strict = gameMode.value
+    meta.value.strict = mode
 
-  if (gameMode.value === 'strict' && parsedTries.value.length > 0) {
+  if (mode === 'strict' && parsedTries.value.length > 0) {
     const inputParsed = parseWord(input.value)
     if (!checkHardMode(inputParsed, parsedTries.value)) {
       toastKey.value = 'hard-mode-violation'
