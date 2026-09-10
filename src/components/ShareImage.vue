@@ -1,33 +1,59 @@
 <script setup lang="ts">
 import { toPng } from 'html-to-image'
 import { saveAs } from 'file-saver'
-import { dayNoHanzi, isDev, isIOS, isMobile, playMode, triesRatings, useMask } from '~/state'
-import { tries } from '~/storage'
+import { isDev, isIOS, isMobile } from '~/state'
+import { formatDuration } from '~/storage'
 import { t } from '~/i18n'
 import { clearRatedImageVariants, imageVariantKey } from '~/eval/presentation'
+import type { ShareGameSnapshot } from '~/logic/types'
+import { numberToHanzi } from '~/logic'
 
 const props = withDefaults(defineProps<{
+  game: ShareGameSnapshot
+  masked?: boolean
   showEvaluation?: boolean
 }>(), {
+  masked: false,
   showEvaluation: false,
 })
 
 const el = ref<HTMLDivElement>()
 const show = ref(false)
 const renderEvaluation = ref(false)
+const renderMask = ref(false)
 const dataUrls = reactive<Record<string, string>>({})
 let mounted = false
 let ratingGeneration = 0
 let renderQueue = Promise.resolve()
 
 const downloadLabel = computed(() => {
-  if (playMode.value === 'daily') return dayNoHanzi.value
-  if (playMode.value === 'random') return t('random-mode')
+  if (props.game.playMode === 'daily') return `${numberToHanzi(props.game.day || 0)}日`
+  if (props.game.playMode === 'random') return t('random-mode')
   return t('custom-mode')
 })
-const shareHost = computed(() => playMode.value === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
-const dataUrl = computed(() => dataUrls[imageVariantKey(useMask.value, props.showEvaluation)] || '')
-const ratingSignature = computed(() => triesRatings.value.map(rating => rating || '').join('|'))
+const shareHost = computed(() => props.game.playMode === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
+const dataUrl = computed(() => dataUrls[imageVariantKey(props.masked, props.showEvaluation)] || '')
+const ratingSignature = computed(() => props.game.ratings.map(rating => rating || '').join('|'))
+const gameModeLabel = computed(() => {
+  if (props.game.gameMode === 'unlimited')
+    return t('game-mode-unlimited')
+  if (props.game.gameMode === 'strict')
+    return t('game-mode-strict')
+  return ''
+})
+const hintLabel = computed(() => {
+  if (props.game.hintLevel === 2)
+    return t('hint-level-2')
+  if (props.game.hintLevel === 1 || props.game.hintUsed)
+    return t('hint-level-1')
+  return t('hint-level-none')
+})
+const footerParts = computed(() => [
+  props.game.playMode === 'daily' ? downloadLabel.value : '',
+  hintLabel.value,
+  gameModeLabel.value,
+  formatDuration(props.game.duration),
+].filter(Boolean))
 
 async function renderVariants(withEvaluation: boolean, generation: number) {
   const plainKey = imageVariantKey(false, withEvaluation)
@@ -37,7 +63,6 @@ async function renderVariants(withEvaluation: boolean, generation: number) {
   if (withEvaluation && generation !== ratingGeneration)
     return
 
-  const previousMask = useMask.value
   show.value = true
   renderEvaluation.value = withEvaluation
   try {
@@ -47,7 +72,7 @@ async function renderVariants(withEvaluation: boolean, generation: number) {
       const key = imageVariantKey(masked, withEvaluation)
       if (dataUrls[key])
         continue
-      useMask.value = masked
+      renderMask.value = masked
       await nextTick()
       const rendered = await toPng(el.value!)
       if (!withEvaluation || generation === ratingGeneration)
@@ -55,7 +80,6 @@ async function renderVariants(withEvaluation: boolean, generation: number) {
     }
   }
   finally {
-    useMask.value = previousMask
     show.value = false
   }
 }
@@ -87,7 +111,7 @@ onMounted(() => {
 })
 
 async function download() {
-  saveAs(dataUrl.value, `${t('name')} ${downloadLabel.value}${useMask.value ? ' 遮罩' : ''}.png`)
+  saveAs(dataUrl.value, `${t('name')} ${downloadLabel.value}${props.masked ? ' 遮罩' : ''}.png`)
 }
 </script>
 
@@ -106,7 +130,6 @@ async function download() {
       {{ t('download') }}
     </button>
 
-    <ToggleMask mx2 />
   </div>
 
   <div v-if="show" fixed op0 top-0 left-0 pointer-events-none>
@@ -117,15 +140,19 @@ async function download() {
       </div>
 
       <WordBlocks
-        v-for="w, i of tries"
+        v-for="w, i of game.tries"
         :key="i"
         :word="w"
         :revealed="true"
         :animate="false"
-        :rating="renderEvaluation ? triesRatings[i] : null"
+        :answer="game.answer"
+        :masked="renderMask"
+        :rating="renderEvaluation ? game.ratings[i] : null"
       />
-      <div v-if="playMode !== 'daily'" op50 my1 text-sm>{{ playMode === 'random' ? t('random-mode') : t('custom-mode') }}</div>
-      <ResultFooter :day="playMode === 'daily'" mt3 w-full />
+      <div v-if="game.playMode !== 'daily'" op50 my1 text-sm>{{ game.playMode === 'random' ? t('random-mode') : t('custom-mode') }}</div>
+      <div op50 my1 mt3 text-sm ws-nowrap text-center>
+        {{ footerParts.join(' · ') }}
+      </div>
     </div>
   </div>
 </template>

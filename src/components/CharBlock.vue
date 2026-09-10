@@ -8,7 +8,10 @@ const props = defineProps<{
   char?: ParsedChar
   answer?: MatchResult
   active?: boolean
+  masked?: boolean
 }>()
+
+const masked = computed(() => props.masked ?? useMask.value)
 
 const exact = computed(() => props.answer && Object.values(props.answer).every(i => i === 'exact'))
 
@@ -28,7 +31,7 @@ const parsed = computed(() => {
 })
 
 function getColor(result?: MatchType, isChar = false) {
-  const pre = useMask.value
+  const pre = masked.value
     ? `bg-current ${isChar ? ' !op70' : '!op40'} border border-current`
     : ''
 
@@ -104,7 +107,7 @@ const partTwo = computed(() => {
         <div
           absolute text-3xl leading-1em flex items-center text-center
           top-0 bottom-0
-          :class="[getColor(parsed?.char, true), useMask ? 'left-3' : 'left-4']"
+          :class="[getColor(parsed?.char, true), masked ? 'left-3' : 'left-4']"
         >
           {{ char.char }}
         </div>
@@ -132,14 +135,14 @@ const partTwo = computed(() => {
       <template v-else>
         <div
           absolute text-3xl leading-1em
-          :class="[getColor(parsed?.char, true), useMask ? 'top-8.5' : 'top-8']"
+          :class="[getColor(parsed?.char, true), masked ? 'top-8.5' : 'top-8']"
         >
           {{ char.char }}
         </div>
         <div
           absolute font-mono
           text-center left-0 right-0 font-100 flex flex-col items-center
-          :class="[useMask ? 'top-14px' : 'top-11px']"
+          :class="[masked ? 'top-14px' : 'top-11px']"
         >
           <div
             relative ma items-start
@@ -155,7 +158,7 @@ const partTwo = computed(() => {
                   {{ inputMode === 'sp' ? w : w.replace('v', 'u') }}
                 </div>
                 <VDots
-                  v-if="!useMask && idx === vLocation && inputMode === 'py'"
+                  v-if="!masked && idx === vLocation && inputMode === 'py'"
                   :class="getColor(parsed?._2)"
                   absolute w="87%" left="8%" bottom="0.76rem"
                 />
@@ -165,7 +168,7 @@ const partTwo = computed(() => {
                   :class="getColor(parsed?.tone)"
                   absolute w="86%" left="8%"
                   :style="{
-                    bottom: useMask
+                    bottom: masked
                       ? '1.25rem'
                       : w === 'v'
                         ? '0.85rem'

@@ -1,7 +1,7 @@
 import type { SpMode } from '@hankit/tools'
 import { preferZhuyin, t } from './i18n'
 import { dayNo } from './state'
-import type { FrequencyLevel, GameMode, InputMode, PlayMode, TriesMeta } from './logic'
+import type { CareerRecord, FrequencyLevel, GameMode, InputMode, PlayMode, TriesMeta } from './logic'
 export const legacyTries = useStorage<Record<number, string[]>>('handle-tries', {})
 
 export const history = useStorage<Record<number, TriesMeta>>('handle-tries-meta', {})
@@ -20,6 +20,7 @@ export const gameMode = useStorage<GameMode>('handle-game-mode', 'normal')
 export const playMode = useStorage<PlayMode>('handle-play-mode', 'daily')
 export const frequencyLevel = useStorage<FrequencyLevel>('handle-frequency', 'normal')
 export const randomMeta = useStorage<TriesMeta>('handle-random-meta', {})
+export const randomHistory = useStorage<Record<string, CareerRecord>>('handle-random-history', {})
 function customStorageKey(): string {
   const params = new URLSearchParams(location.search)
   const cp = params.get('custom')
@@ -101,9 +102,30 @@ export function markStart() {
     meta.value.start = Date.now()
 }
 
-export function markEnd() {
-  if (meta.value.end)
+function currentDuration() {
+  return (meta.value.duration || 0) + (meta.value.start ? Date.now() - meta.value.start : 0)
+}
+
+export function markResult() {
+  if (meta.value.resultAt)
     return
+  const legacyFinished = !!(meta.value.passed || meta.value.answer || meta.value.failed)
+  meta.value.resultAt = meta.value.end
+    || (legacyFinished ? meta.value.start : undefined)
+    || Date.now()
+  meta.value.resultDuration = meta.value.end || legacyFinished
+    ? (meta.value.duration || 0)
+    : currentDuration()
+}
+
+export function markEnd() {
+  if (meta.value.end) {
+    if (!meta.value.resultAt) {
+      meta.value.resultAt = meta.value.end
+      meta.value.resultDuration = meta.value.duration || 0
+    }
+    return
+  }
 
   if (!meta.value.duration)
     meta.value.duration = 0
@@ -111,6 +133,10 @@ export function markEnd() {
   meta.value.end = Date.now()
   if (meta.value.start)
     meta.value.duration += meta.value.end - meta.value.start
+  if (!meta.value.resultAt) {
+    meta.value.resultAt = meta.value.end
+    meta.value.resultDuration = meta.value.duration
+  }
 }
 
 export function pauseTimer() {
@@ -126,20 +152,7 @@ export function pauseTimer() {
   }
 }
 
-export const gamesCount = computed(() => Object.values(history.value).filter(m => m.passed || m.answer || m.failed).length)
-export const passedTries = computed(() => Object.values(history.value).filter(m => m.passed))
-export const passedCount = computed(() => passedTries.value.length)
-export const noHintPassedCount = computed(() => Object.values(history.value).filter(m => m.passed && !m.hint).length)
-export const historyTriesCount = computed(() => Object.values(history.value).filter(m => m.passed || m.answer || m.failed).map(m => m.tries?.length || 0).reduce((a, b) => a + b, 0))
-
 export const triesCount = computed(() => tries.value.length)
-export const averageDurations = computed(() => {
-  const items = Object.values(history.value).filter(m => m.passed && m.duration)
-  if (!items.length)
-    return 0
-  const durations = items.map(m => m.duration!).reduce((a, b) => a + b, 0)
-  return formatDuration(durations / items.length)
-})
 
 export function formatDuration(duration: number) {
   const ts = duration / 1000

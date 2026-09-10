@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { idiomSearchWord, isDark, playMode, showDashboard, showHelp, showIdiomExplanation, showSettings, useMask } from '~/state'
-import { gamesCount } from '~/storage'
+import { careerGamesCount } from '~/career'
 
 const toggleDark = useToggle(isDark)
 const toggleSettings = useToggle(showSettings)
@@ -42,7 +42,7 @@ function togglePlayMode() {
         <button icon-btn mx2 @click="idiomSearchWord = ''; showIdiomExplanation = true">
           <div i-carbon-search />
         </button>
-        <button v-if="gamesCount" icon-btn mx2 @click="toggleDashboard()">
+        <button v-if="careerGamesCount" icon-btn mx2 @click="toggleDashboard()">
           <div i-carbon-catalog />
         </button>
       </div>

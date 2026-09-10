@@ -1,7 +1,9 @@
 import { breakpointsTailwind } from '@vueuse/core'
+import { nanoid } from 'nanoid'
+import { watchEffect } from 'vue'
 import type { MatchType, ParsedChar } from './logic'
-import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
-import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, meta, randomMeta, showEval, spMode, tries } from './storage'
+import { START_DATE, TRIES_LIMIT, WORD_LENGTH, createCareerRecord, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
+import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, markResult, meta, randomHistory, randomMeta, showEval, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
@@ -51,22 +53,55 @@ export const randomSeed = ref(0)
 
 function generateRandomGame() {
   const generated = getRandomAnswer(frequencyLevel.value)
+  const createdAt = Date.now()
   randomMeta.value = {
     randomAnswer: {
       ...generated,
       frequency: frequencyLevel.value,
+      roundId: nanoid(),
+      createdAt,
     },
   }
   return generated
 }
 
+function archiveCurrentRandomGame() {
+  const stored = randomMeta.value.randomAnswer
+  if (!stored?.word || !stored.roundId)
+    return
+  const record = createCareerRecord({
+    id: stored.roundId,
+    playMode: 'random',
+    answer: stored.word,
+    frequency: stored.frequency,
+    meta: randomMeta.value,
+    fallbackTime: stored.createdAt || Date.now(),
+  })
+  if (!record)
+    return
+  randomHistory.value = { ...randomHistory.value, [record.id]: record }
+}
+
 function restoreRandomGame() {
   const stored = randomMeta.value.randomAnswer
-  if (stored?.word && stored.frequency === frequencyLevel.value)
+  if (stored?.word && stored.frequency === frequencyLevel.value) {
+    if (!stored.roundId || !stored.createdAt) {
+      randomMeta.value = {
+        ...randomMeta.value,
+        randomAnswer: {
+          ...stored,
+          roundId: stored.roundId || nanoid(),
+          createdAt: stored.createdAt || randomMeta.value.start || Date.now(),
+        },
+      }
+    }
+    archiveCurrentRandomGame()
     return
+  }
 
   // Older versions persisted guesses without their answer. Those guesses
   // cannot be recovered safely, so start one internally consistent round.
+  archiveCurrentRandomGame()
   generateRandomGame()
 }
 
@@ -79,14 +114,22 @@ export const randomAnswer = computed(() => {
 })
 
 export function newRandomGame() {
+  archiveCurrentRandomGame()
   generateRandomGame()
   randomSeed.value++
 }
 
 export function resetRandomGameProgress() {
   const storedAnswer = randomMeta.value.randomAnswer
+  if (storedAnswer?.roundId && randomHistory.value[storedAnswer.roundId]) {
+    const nextHistory = { ...randomHistory.value }
+    delete nextHistory[storedAnswer.roundId]
+    randomHistory.value = nextHistory
+  }
   randomMeta.value = storedAnswer ? { randomAnswer: storedAnswer } : {}
 }
+
+watch(randomMeta, archiveCurrentRandomGame, { deep: true, flush: 'post' })
 
 watch(frequencyLevel, () => {
   if (playMode.value === 'random')
@@ -168,6 +211,10 @@ export const isFailed = computed(() => {
     return false
   return !isPassed.value && tries.value.length >= TRIES_LIMIT
 })
+watchEffect(() => {
+  if (isFailed.value)
+    markResult()
+})
 export const isFinished = computed(() => {
   if (!hasActiveAnswer.value)
     return false
@@ -189,6 +236,7 @@ export function revealAnswerAsFailure() {
   showGiveUp.value = false
   if (meta.value.strict == null)
     meta.value.strict = _gameMode.value
+  markResult()
   meta.value.answer = true
   meta.value.failed = true
 }

@@ -51,6 +51,30 @@ describe('prepared evaluation parity', () => {
 })
 
 describe('evaluation worker engine', () => {
+  it('can replay history without preparing a score for a nonexistent next guess', () => {
+    const engine = new EvalWorkerEngine()
+    const responses: EvalWorkerResponse[] = []
+
+    engine.handle({
+      type: 'init',
+      sessionId: 6,
+      guesses: [],
+      ratingsCurrent: false,
+      includeDebug: false,
+      prepareNext: false,
+    }, response => responses.push(response))
+
+    expect(responses).toHaveLength(1)
+    expect(responses[0]).toMatchObject({
+      type: 'ready',
+      sessionId: 6,
+      index: 0,
+      preparationMs: 0,
+      generationMs: 0,
+      rankingMs: 0,
+    })
+  })
+
   it('processes rapid guesses in order and prepares the following turn', () => {
     const engine = new EvalWorkerEngine()
     const responses: EvalWorkerResponse[] = []

@@ -13,6 +13,7 @@ const props = withDefaults(
     animate?: boolean
     active?: boolean
     rating?: Rating | null
+    masked?: boolean
   }>(), {
     animate: true,
   },
@@ -59,12 +60,14 @@ watchEffect((onCleanup) => {
           class="front"
           :char="c"
           :active="active"
+          :masked="masked"
           :style="{ transitionDelay: `${i * (300 + Math.random() * 50)}ms` }"
         />
         <CharBlock
           class="back"
           :char="c"
           :answer="result[i]"
+          :masked="masked"
           :style="{
             transitionDelay: `${i * (300 + Math.random() * 50)}ms`,
             animationDelay: `${i * (100 + Math.random() * 50)}ms`,
@@ -76,6 +79,7 @@ watchEffect((onCleanup) => {
           :char="c"
           :answer="result[i]"
           :active="active"
+          :masked="masked"
         />
       </template>
     </div>

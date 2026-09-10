@@ -59,6 +59,7 @@ export type EvalWorkerRequest =
       guesses: EvalWorkerGuess[]
       ratingsCurrent: boolean
       includeDebug: boolean
+      prepareNext?: boolean
     }
   | {
       type: 'append'
@@ -208,7 +209,20 @@ export class EvalWorkerEngine {
         snapshot: snapshot(this.state, this.includeDebug),
       })
     }
-    this.prepareNext(emit)
+    if (request.prepareNext !== false) {
+      this.prepareNext(emit)
+    }
+    else {
+      emit({
+        type: 'ready',
+        sessionId: this.sessionId,
+        index: this.state.history.length,
+        preparationMs: 0,
+        generationMs: 0,
+        rankingMs: 0,
+        snapshot: snapshot(this.state, this.includeDebug),
+      })
+    }
   }
 
   private append(

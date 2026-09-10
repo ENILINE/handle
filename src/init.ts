@@ -1,4 +1,4 @@
-import { initialized, markEnd, markStart, meta, migrateGameMode, pauseTimer } from './storage'
+import { initialized, markEnd, markResult, markStart, meta, migrateGameMode, pauseTimer } from './storage'
 
 migrateGameMode()
 
@@ -14,8 +14,10 @@ if (!initialized.value)
   showHelp.value = true
 
 watchEffect(() => {
-  if (isPassed.value)
+  if (isPassed.value) {
+    markResult()
     meta.value.passed = true
+  }
 })
 
 watch(daySince, (n, o) => {

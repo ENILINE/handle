@@ -77,6 +77,12 @@ function reset() {
   inputValue.value = ''
 }
 
+function nextRandomGame() {
+  input.value = ''
+  inputValue.value = ''
+  newRandomGame()
+}
+
 async function changeDevDay(offset: number) {
   if (playMode.value === 'random')
     newRandomGame()
@@ -244,7 +250,7 @@ watchEffect(() => {
             </button>
           </div>
           <div v-if="playMode === 'random'" flex justify-center mt2>
-            <button btn flex="~ gap-1 center" @click="reset(); newRandomGame()">
+            <button btn flex="~ gap-1 center" @click="nextRandomGame()">
               <div i-ri-shuffle-line /> {{ t('new-random-game') }}
             </button>
           </div>

@@ -1,28 +1,31 @@
 <script setup lang="ts">
 import { t } from '~/i18n'
-import { answer, dayNoHanzi, parseWord, playMode, testAnswer, triesRatings } from '~/state'
-import { meta, tries } from '~/storage'
+import { parseWord, testAnswer } from '~/state'
 import { formatRatedShareRow, formatShareGameMode } from '~/eval/presentation'
+import type { ShareGameSnapshot } from '~/logic/types'
+import { numberToHanzi } from '~/logic'
 
 const props = withDefaults(defineProps<{
+  game: ShareGameSnapshot
   showEvaluation?: boolean
 }>(), {
   showEvaluation: false,
 })
 
-const shareHost = computed(() => playMode.value === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
+const shareHost = computed(() => props.game.playMode === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
 const dayLabel = computed(() => {
-  if (playMode.value === 'daily') return dayNoHanzi.value
-  if (playMode.value === 'random') return t('random-mode')
+  if (props.game.playMode === 'daily') return `${numberToHanzi(props.game.day || 0)}日`
+  if (props.game.playMode === 'random') return t('random-mode')
   return t('custom-mode')
 })
 
-const gameModeLabel = computed(() => formatShareGameMode(meta.value.strict, key => t(key)))
+const gameModeLabel = computed(() => formatShareGameMode(props.game.gameMode, key => t(key)))
 
 const lines = computed(() => {
-  const table = tries.value.map((word, index) => {
-    const parsed = parseWord(word, answer.value.word)
-    const symbols = testAnswer(parsed)
+  const parsedAnswer = parseWord(props.game.answer, props.game.answer)
+  const table = props.game.tries.map((word, index) => {
+    const parsed = parseWord(word, props.game.answer)
+    const symbols = testAnswer(parsed, parsedAnswer)
       .map((i, idx) => {
         if (i.char === 'exact')
           return '🟩'
@@ -41,7 +44,7 @@ const lines = computed(() => {
       .join('')
     return formatRatedShareRow(
       symbols,
-      triesRatings.value[index],
+      props.game.ratings[index],
       props.showEvaluation,
       key => t(key),
     )
@@ -52,7 +55,7 @@ const lines = computed(() => {
       t('name'),
       dayLabel.value,
       gameModeLabel.value,
-      !meta.value.hint ? t('hint-level-none') : '',
+      !props.game.hintUsed ? t('hint-level-none') : '',
     ].filter(Boolean).join(' · '),
     '',
     ...table,
