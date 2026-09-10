@@ -30,12 +30,20 @@ const result = computed(() => {
 
 const flip = ref(false)
 
-watchEffect(() => {
-  if (props.revealed) {
-    setTimeout(() => {
-      flip.value = true
-    }, Math.random() * 300)
+watchEffect((onCleanup) => {
+  if (!props.revealed) {
+    flip.value = false
+    return
   }
+  if (disableAnimations.value) {
+    flip.value = true
+    return
+  }
+
+  const timer = window.setTimeout(() => {
+    flip.value = true
+  }, Math.random() * 300)
+  onCleanup(() => window.clearTimeout(timer))
 })
 </script>
 
@@ -44,9 +52,9 @@ watchEffect(() => {
     <div
       v-for="c, i in parseWord(word.padEnd(WORD_LENGTH, ' '), answer || todayAnswer.word)" :key="i"
       w-20 h-20 m1
-      class="tile" :class="[flip ? 'revealed' : '']"
+      class="tile" :class="[flip ? 'revealed' : '', animate && disableAnimations ? 'no-animation' : '']"
     >
-      <template v-if="animate && !disableAnimations">
+      <template v-if="animate">
         <CharBlock
           class="front"
           :char="c"
@@ -96,6 +104,10 @@ watchEffect(() => {
 }
 .tile .back {
   transform: rotateY(180deg);
+}
+.tile.no-animation .front,
+.tile.no-animation .back {
+  transition: none;
 }
 .tile.revealed .front {
   transform: rotateY(180deg);
