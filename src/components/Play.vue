@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { filterNonChineseChars, toSimplified } from '@hankit/tools'
-import { activeGameMode, answer, customOrigin, dayNo, evalDebugTrace, evaluationEnabled, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showGiveUp, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
+import { activeGameMode, answer, customOrigin, dayNo, evalDebugTrace, evaluationEnabled, hint, idiomSearchWord, isDev, isFailed, isFinished, lastEvalDebug, newRandomGame, parseWord, parsedTries, playMode, resetCustomGame, resetRandomGameProgress, showCheatSheet, showCustomAnswer, showCustomShare, showFailed, showGiveUp, showHelp, showHint, showIdiomExplanation, triesRatings } from '~/state'
 import { markStart, meta, tries, useNoHint } from '~/storage'
 import { t } from '~/i18n'
 import { TRIES_LIMIT, WORD_LENGTH, checkHardMode, checkValidIdiom } from '~/logic'
@@ -66,10 +66,31 @@ function enter() {
   inputValue.value = ''
 }
 function reset() {
-  tries.value = []
-  meta.value = {}
+  if (playMode.value === 'random') {
+    resetRandomGameProgress()
+  }
+  else {
+    tries.value = []
+    meta.value = {}
+  }
   input.value = ''
   inputValue.value = ''
+}
+
+async function changeDevDay(offset: number) {
+  if (playMode.value === 'random')
+    newRandomGame()
+
+  // useStorage writes on Vue's update queue. Let the new random round reach
+  // localStorage before navigation reloads the application.
+  await nextTick()
+  const url = new URL(window.location.href)
+  url.search = ''
+  url.searchParams.set('dev', 'hey')
+  url.searchParams.set('d', String(dayNo.value + offset))
+  if (playMode.value === 'random')
+    url.searchParams.set('mode', 'random')
+  window.location.assign(url.toString())
 }
 function handleInput(e: Event) {
   const el = (e.target! as HTMLInputElement)
@@ -247,24 +268,24 @@ watchEffect(() => {
         </div>
         <div>{{ answer.word }}</div>
         <div flex gap2>
-          <a
+          <button
             class="btn"
-            :href="`/?dev=hey&d=${dayNo - 1}`"
+            @click="changeDevDay(-1)"
           >
             上一天
-          </a>
+          </button>
           <button
             class="btn"
             @click="reset"
           >
             重置
           </button>
-          <a
+          <button
             class="btn"
-            :href="`/?dev=hey&d=${dayNo + 1}`"
+            @click="changeDevDay(1)"
           >
             下一天
-          </a>
+          </button>
         </div>
 
         <!-- Eval debug -->

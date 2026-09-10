@@ -47,4 +47,22 @@ it('restores a random answer with its guesses and can reveal it after ten guesse
   expect(storage.meta.value.failed).toBe(true)
   expect(storage.meta.value.answer).toBe(true)
   expect(app.isFinished.value).toBe(true)
+
+  const storedAnswer = app.answer.value
+  app.resetRandomGameProgress()
+  expect(app.answer.value).toEqual(storedAnswer)
+  expect(storage.tries.value).toEqual([])
+  expect(storage.randomMeta.value).toEqual({
+    randomAnswer: {
+      word: '举一反三',
+      hint: '一',
+      frequency: 'normal',
+    },
+    tries: [],
+  })
+
+  storage.tries.value = ['先来后到']
+  app.newRandomGame()
+  expect(app.answer.value).toEqual({ word: '狂风怒号', hint: '风' })
+  expect(storage.tries.value).toEqual([])
 })

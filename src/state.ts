@@ -83,6 +83,11 @@ export function newRandomGame() {
   randomSeed.value++
 }
 
+export function resetRandomGameProgress() {
+  const storedAnswer = randomMeta.value.randomAnswer
+  randomMeta.value = storedAnswer ? { randomAnswer: storedAnswer } : {}
+}
+
 watch(frequencyLevel, () => {
   if (playMode.value === 'random')
     newRandomGame()
