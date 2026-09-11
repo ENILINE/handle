@@ -1,4 +1,6 @@
 <script setup lang='ts'>
+import { acquireModalScrollLock } from '~/modal-scroll-lock'
+
 const props = withDefaults(defineProps<{
   modelValue?: boolean
   direction?: string
@@ -12,6 +14,13 @@ const props = withDefaults(defineProps<{
 defineEmits<{
   (e: 'update:modelValue', value: boolean): void
 }>()
+
+let releaseScrollLock: (() => void) | undefined
+watch(() => props.modelValue, (visible) => {
+  releaseScrollLock?.()
+  releaseScrollLock = visible ? acquireModalScrollLock() : undefined
+}, { immediate: true })
+onBeforeUnmount(() => releaseScrollLock?.())
 
 const positionClass = computed(() => {
   switch (props.direction) {
@@ -73,7 +82,7 @@ const transform = computed(() => {
       @click="$emit('update:modelValue', false)"
     />
     <div
-      class="bg-base border-base absolute transition-all duration-200 ease-out max-w-screen max-h-screen overflow-auto scrolls"
+      class="bg-base border-base absolute transition-all duration-200 ease-out max-w-screen max-h-screen overflow-auto overscroll-contain scrolls"
       :class="[positionClass]"
       :style="modelValue ? {} : { transform }"
     >

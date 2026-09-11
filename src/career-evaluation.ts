@@ -22,9 +22,9 @@ export function startCareerEvaluation(record: CareerRecord, callbacks: CareerEva
       return
     const response = event.data
     if (response.type === 'error') {
-      callbacks.error?.(response.message)
-      worker.terminate()
       stopped = true
+      worker.terminate()
+      callbacks.error?.(response.message)
       return
     }
     if (response.type === 'guess' && response.applyRating) {
@@ -33,16 +33,17 @@ export function startCareerEvaluation(record: CareerRecord, callbacks: CareerEva
       return
     }
     if (response.type === 'ready' && response.index === record.tries.length) {
-      callbacks.complete([...ratings])
-      worker.terminate()
       stopped = true
+      worker.terminate()
+      callbacks.complete([...ratings])
     }
   }
   worker.onerror = (event) => {
-    if (!stopped)
-      callbacks.error?.(event.message || 'Worker error')
-    worker.terminate()
+    if (stopped)
+      return
     stopped = true
+    worker.terminate()
+    callbacks.error?.(event.message || 'Worker error')
   }
 
   const parsedAnswer = parseWord(record.answer, record.answer, 'py')
@@ -71,4 +72,3 @@ export function startCareerEvaluation(record: CareerRecord, callbacks: CareerEva
     worker.terminate()
   }
 }
-

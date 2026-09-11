@@ -17,6 +17,7 @@ const detailRatings = ref<CareerRecord['ratings']>([])
 const evaluationLoading = ref(false)
 const evaluationError = ref(false)
 let stopEvaluation: (() => void) | undefined
+let evaluationRun = 0
 
 const filteredRecords = computed(() => filterCareerRecords(careerRecords.value, {
   play: playFilter.value,
@@ -27,7 +28,7 @@ const selectedRecord = computed(() => careerRecords.value.find(record => record.
 const canShowRecordEvaluation = computed(() => !!selectedRecord.value
   && evaluationEnabled.value
   && selectedRecord.value.gameMode !== 'strict')
-const shouldLoadRecordEvaluation = computed(() => page.value === 'detail' && canShowRecordEvaluation.value)
+const shouldLoadRecordEvaluation = computed(() => page.value !== 'main' && canShowRecordEvaluation.value)
 const shareGame = computed(() => selectedRecord.value
   ? careerRecordToShareGame({ ...selectedRecord.value, ratings: detailRatings.value })
   : undefined)
@@ -38,52 +39,81 @@ const histogram = computed(() => [
 const histogramMax = computed(() => Math.max(1, ...histogram.value.map(item => item.count)))
 
 function stopRatingWorker() {
-  stopEvaluation?.()
+  evaluationRun++
+  const stop = stopEvaluation
   stopEvaluation = undefined
+  stop?.()
   evaluationLoading.value = false
+}
+
+function ratingRunIsCurrent(run: number, recordId: string) {
+  return run === evaluationRun
+    && selectedRecord.value?.id === recordId
+    && shouldLoadRecordEvaluation.value
+}
+
+function startRecordRatingWorker(record: CareerRecord, run: number, retry: number) {
+  const fail = (message: string) => {
+    if (!ratingRunIsCurrent(run, record.id))
+      return
+    stopEvaluation = undefined
+    if (retry < 1) {
+      queueMicrotask(() => {
+        if (ratingRunIsCurrent(run, record.id))
+          startRecordRatingWorker(record, run, retry + 1)
+      })
+      return
+    }
+    evaluationLoading.value = false
+    evaluationError.value = true
+    if (isDev)
+      console.warn('[career] historical evaluation failed', { id: record.id, message })
+  }
+
+  evaluationLoading.value = true
+  try {
+    const stop = startCareerEvaluation(record, {
+      update(ratings) {
+        if (ratingRunIsCurrent(run, record.id))
+          detailRatings.value = ratings
+      },
+      complete(ratings) {
+        if (!ratingRunIsCurrent(run, record.id))
+          return
+        stopEvaluation = undefined
+        detailRatings.value = ratings
+        evaluationLoading.value = false
+        saveCareerRatings(record, ratings, EVAL_VERSION)
+      },
+      error: fail,
+    })
+    if (ratingRunIsCurrent(run, record.id))
+      stopEvaluation = stop
+    else
+      stop()
+  }
+  catch (error) {
+    fail(error instanceof Error ? error.message : String(error))
+  }
 }
 
 function loadRecordRatings() {
   stopRatingWorker()
   evaluationError.value = false
   const record = selectedRecord.value
-  if (!record || !shouldLoadRecordEvaluation.value) {
+  if (!record || !canShowRecordEvaluation.value) {
     detailRatings.value = []
     return
   }
+  if (!shouldLoadRecordEvaluation.value)
+    return
   if (canReuseRatings(record.ratingsVersion, record.ratings.length, record.tries.length)) {
     detailRatings.value = [...record.ratings]
     return
   }
 
   detailRatings.value = Array.from({ length: record.tries.length }, () => null)
-  evaluationLoading.value = true
-  try {
-    stopEvaluation = startCareerEvaluation(record, {
-      update(ratings) {
-        detailRatings.value = ratings
-      },
-      complete(ratings) {
-        detailRatings.value = ratings
-        evaluationLoading.value = false
-        stopEvaluation = undefined
-        saveCareerRatings(record, ratings, EVAL_VERSION)
-      },
-      error(message) {
-        evaluationLoading.value = false
-        evaluationError.value = true
-        stopEvaluation = undefined
-        if (isDev)
-          console.warn('[career] historical evaluation failed', { id: record.id, message })
-      },
-    })
-  }
-  catch (error) {
-    evaluationLoading.value = false
-    evaluationError.value = true
-    if (isDev)
-      console.warn('[career] could not start historical evaluation', { id: record.id, error })
-  }
+  startRecordRatingWorker(record, evaluationRun, 0)
 }
 
 watch(
@@ -106,6 +136,9 @@ function close() {
 }
 
 function openDetail(record: CareerRecord) {
+  detailRatings.value = canReuseRatings(record.ratingsVersion, record.ratings.length, record.tries.length)
+    ? [...record.ratings]
+    : Array.from({ length: record.tries.length }, () => null)
   selectedId.value = record.id
   page.value = 'detail'
 }
@@ -171,7 +204,7 @@ function playedAt(record: CareerRecord) {
       <div flex="~ center wrap gap-3" mb4>
         <label flex="~ center gap-2">
           <span op50>{{ t('career-filter-play') }}</span>
-          <select v-model="playFilter" border="~ base" bg-transparent px2 py1>
+          <select v-model="playFilter" class="career-select" border="~ base" px2 py1>
             <option value="all">{{ t('career-all') }}</option>
             <option value="daily">{{ t('career-daily') }}</option>
             <option value="random">{{ t('career-random') }}</option>
@@ -182,7 +215,7 @@ function playedAt(record: CareerRecord) {
         </label>
         <label flex="~ center gap-2">
           <span op50>{{ t('career-filter-game') }}</span>
-          <select v-model="gameFilter" border="~ base" bg-transparent px2 py1>
+          <select v-model="gameFilter" class="career-select" border="~ base" px2 py1>
             <option value="all">{{ t('career-all') }}</option>
             <option value="unlimited">{{ t('game-mode-unlimited') }}</option>
             <option value="normal">{{ t('game-mode-normal') }}</option>
@@ -289,3 +322,21 @@ function playedAt(record: CareerRecord) {
     />
   </div>
 </template>
+
+<style>
+.career-select,
+.career-select option {
+  color: #222;
+  background-color: #fff;
+}
+
+html.dark .career-select {
+  color-scheme: dark;
+}
+
+html.dark .career-select,
+html.dark .career-select option {
+  color: #eee;
+  background-color: #242424;
+}
+</style>
