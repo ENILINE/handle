@@ -10,7 +10,8 @@ const previousGlobals = Object.keys(globals).map(name => [name, Object.getOwnPro
 for (const [name, value] of Object.entries(globals)) vi.stubGlobal(name, value)
 afterAll(() => {
   for (const [name, descriptor] of previousGlobals) {
-    if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+    if (descriptor)
+      Object.defineProperty(globalThis, name, descriptor)
     else Reflect.deleteProperty(globalThis, name)
   }
 })

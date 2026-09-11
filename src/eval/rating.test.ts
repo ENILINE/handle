@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { MatchResult, Rating } from '../logic/types'
-import { advanceEvaluation, createEvalState, evaluate, ratingFromPercentile } from './index'
-import { higherRating, matchesAllFeedback, specialRatingForGuess } from './rating'
 import { checkHardMode, parseChar, parseWord, testAnswer } from '../logic/utils'
+import { higherRating, matchesAllFeedback, specialRatingForGuess } from './rating'
+import { advanceEvaluation, createEvalState, evaluate, ratingFromPercentile } from './index'
 
 function rawWord(chars: string, pinyins: string[]) {
   return pinyins.map((pinyin, i) => parseChar(chars[i], pinyin))

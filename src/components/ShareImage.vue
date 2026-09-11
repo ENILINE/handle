@@ -27,8 +27,10 @@ let ratingGeneration = 0
 let renderQueue = Promise.resolve()
 
 const downloadLabel = computed(() => {
-  if (props.game.playMode === 'daily') return `${numberToHanzi(props.game.day || 0)}日`
-  if (props.game.playMode === 'random') return t('random-mode')
+  if (props.game.playMode === 'daily')
+    return `${numberToHanzi(props.game.day || 0)}日`
+  if (props.game.playMode === 'random')
+    return t('random-mode')
   return t('custom-mode')
 })
 const shareHost = computed(() => props.game.playMode === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
@@ -129,7 +131,6 @@ async function download() {
       <div i-carbon-download />
       {{ t('download') }}
     </button>
-
   </div>
 
   <div v-if="show" fixed op0 top-0 left-0 pointer-events-none>
@@ -149,7 +150,9 @@ async function download() {
         :masked="renderMask"
         :rating="renderEvaluation ? game.ratings[i] : null"
       />
-      <div v-if="game.playMode !== 'daily'" op50 my1 text-sm>{{ game.playMode === 'random' ? t('random-mode') : t('custom-mode') }}</div>
+      <div v-if="game.playMode !== 'daily'" op50 my1 text-sm>
+        {{ game.playMode === 'random' ? t('random-mode') : t('custom-mode') }}
+      </div>
       <div op50 my1 mt3 text-sm ws-nowrap text-center>
         {{ footerParts.join(' · ') }}
       </div>

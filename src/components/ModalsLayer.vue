@@ -51,7 +51,9 @@ const lg = breakpoints.lg
   </Modal>
   <Modal v-model="showCustomAnswer" direction="top">
     <div p8 flex="~ col" items-center gap-4>
-      <p text-xl font-serif><b>{{ t('correct-answer') }}</b></p>
+      <p text-xl font-serif>
+        <b>{{ t('correct-answer') }}</b>
+      </p>
       <WordBlocks :word="answer.word" />
     </div>
   </Modal>

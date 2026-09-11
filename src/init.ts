@@ -1,12 +1,12 @@
 import { initialized, markEnd, markResult, markStart, meta, migrateGameMode, pauseTimer } from './storage'
 
-migrateGameMode()
-
 import { answer, dayNo, daySince, isDev, isFinished, isPassed, showCheatSheet, showHelp } from './state'
 import { t } from './i18n'
 import { answers } from './answers/list'
 import { START_DATE } from './logic/constants'
 import { tryFixAnswer } from './logic/answer-fix'
+
+migrateGameMode()
 
 useTitle(computed(() => `${t('name')} - ${t('description')}`))
 

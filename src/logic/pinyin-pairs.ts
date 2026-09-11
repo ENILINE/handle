@@ -23,4 +23,3 @@ export function getInitialsForFinal(final: string): readonly string[] {
 export function getFinalsForInitial(initial: string): readonly string[] {
   return finalsByInitial.get(initial) || []
 }
-

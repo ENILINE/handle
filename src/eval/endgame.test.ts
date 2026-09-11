@@ -1,11 +1,11 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, SAMPLED_WORDS, TONE_BITS } from './data'
-import { advanceEvaluation, compressPercentile, compressionForInformation, createEvalState, evalTesting, evaluate, feedbackEntropy, getPosteriorSizes, ratingFromPercentile, toneWeightForInformation } from './index'
-import type { EvalState } from './index'
+import { parseChar, parseWord, testAnswer } from '../logic/utils'
+import { FINALS, FINAL_BITS, INITIALS, INITIAL_BITS, NULL_INITIAL_ID, SAMPLED_WORDS, TONE_BITS } from './data'
 import { enumerateEndgame, satisfiesHistory } from './endgame'
 import type { EndgamePrior, PinyinHistoryEntry } from './endgame'
 import { endgameStructureSignature, feedbackCode, jointFeedbackCode, observedCode, packTuple, pinyinFeedbackCode, tupleValue } from './feedback'
-import { parseChar, parseWord, testAnswer } from '../logic/utils'
+import type { EvalState } from './index'
+import { advanceEvaluation, compressPercentile, compressionForInformation, createEvalState, evalTesting, evaluate, feedbackEntropy, getPosteriorSizes, ratingFromPercentile, toneWeightForInformation } from './index'
 
 const firstFive = ['研经铸史', '先来后到', '投其所好', '分我杯羹', '按部就班']
 const secondFive = [...firstFive.slice(0, 4), '生不逢时']
@@ -27,7 +27,8 @@ function tuple(pinyins: string[]) {
 
 function historyEntry(guess: ReturnType<typeof tuple>, target: ReturnType<typeof tuple>): PinyinHistoryEntry {
   return {
-    guessInitial: guess.initial, guessFinal: guess.final,
+    guessInitial: guess.initial,
+    guessFinal: guess.final,
     initialCode: feedbackCode(guess.initial, target.initial, INITIAL_BITS, NULL_INITIAL_ID),
     finalCode: feedbackCode(guess.final, target.final, FINAL_BITS),
     code: pinyinFeedbackCode(guess.initial, guess.final, target.initial, target.final),
@@ -109,7 +110,8 @@ describe('complete endgame regressions', () => {
     const observed = observedCode(guess, feedback, 'initial') + 81 * observedCode(guess, feedback, 'final') + 6561 * observedCode(guess, feedback, 'pinyin')
     let probability = 0
     search.initials.forEach((initial, p) => {
-      if (jointFeedbackCode(g.initial, g.final, initial, search.finals[p]) === observed) probability += search.weights[p]
+      if (jointFeedbackCode(g.initial, g.final, initial, search.finals[p]) === observed)
+        probability += search.weights[p]
     })
     const result = evaluate(firstState, guess, true, feedback)!
     expect(result.i1).toBeCloseTo(-Math.log2(probability), 12)
@@ -124,7 +126,7 @@ describe('complete endgame regressions', () => {
 
 describe('constraints, duplicate feedback and position-free prior', () => {
   const globalPrior = evalTesting.getEndgamePrior()
-  const ids = ['a', 'an', 'ba', 'pa'].map(py => {
+  const ids = ['a', 'an', 'ba', 'pa'].map((py) => {
     const packed = tuple([py, py, py, py])
     return tupleValue(packed.initial, INITIAL_BITS, 0) * 64 + tupleValue(packed.final, FINAL_BITS, 0)
   })
@@ -238,9 +240,9 @@ describe('information weights and percentile compression', () => {
     expect(compressionForInformation(29.999, 33)).toBeCloseTo(6.999 / 7, 12)
     expect(compressionForInformation(30, 33)).toBe(1)
     expect(compressionForInformation(30.001, 33)).toBe(1)
-    for (const r of [0, 0.40, 0.699, 0.70]) {
+    for (const r of [0, 0.40, 0.699, 0.70])
       for (const t of [0, 0.5, 1]) expect(compressPercentile(r, t)).toBe(r)
-    }
+
     for (const r of [0.701, 0.90, 0.99, 1]) {
       expect(compressPercentile(r, 0)).toBe(r)
       expect(compressPercentile(r, 0.5)).toBe((r + 0.701) / 2)

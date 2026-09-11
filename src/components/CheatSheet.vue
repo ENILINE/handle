@@ -5,7 +5,7 @@ import { t } from '~/i18n'
 import { getSymbolState, showCheatSheet } from '~/state'
 import { NULL_INITIAL, getFinalsForInitial, getInitialsForFinal } from '~/logic/pinyin-pairs'
 
-type PinyinSelection = {
+interface PinyinSelection {
   kind: 'initial' | 'final'
   value: string
 }

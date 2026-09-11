@@ -1,6 +1,6 @@
 import type { MatchResult, ParsedChar } from '../logic/types'
 import { WORD_LENGTH } from '../logic/constants'
-import { FINAL_BITS, FINALS, INITIAL_BITS, NULL_INITIAL_ID } from './data'
+import { FINALS, FINAL_BITS, INITIAL_BITS, NULL_INITIAL_ID } from './data'
 
 const NONE = 0
 const MISPLACED = 1
@@ -13,7 +13,6 @@ export function packTuple(values: readonly number[], bits: number): number {
     packed |= values[position] << (position * bits)
   return packed >>> 0
 }
-
 
 export function tupleValue(tuple: number, bits: number, position: number): number {
   return tuple >>> (position * bits) & ((1 << bits) - 1)
@@ -53,7 +52,6 @@ function feedbackCodeValues(
   a3: number,
   skippedValue = -1,
 ): number {
-
   let s0 = NONE
   let s1 = NONE
   let s2 = NONE
@@ -67,35 +65,55 @@ function feedbackCodeValues(
 
   const usedBefore0 = used
   if (g0 !== skippedValue && s0 !== EXACT) {
-    if (!(used & 1) && g0 === a0) used |= 1
-    else if (!(used & 2) && g0 === a1) used |= 2
-    else if (!(used & 4) && g0 === a2) used |= 4
-    else if (!(used & 8) && g0 === a3) used |= 8
-    if (used !== usedBefore0) s0 = MISPLACED
+    if (!(used & 1) && g0 === a0)
+      used |= 1
+    else if (!(used & 2) && g0 === a1)
+      used |= 2
+    else if (!(used & 4) && g0 === a2)
+      used |= 4
+    else if (!(used & 8) && g0 === a3)
+      used |= 8
+    if (used !== usedBefore0)
+      s0 = MISPLACED
   }
   const usedAfter0 = used
   if (g1 !== skippedValue && s1 !== EXACT) {
-    if (!(used & 1) && g1 === a0) used |= 1
-    else if (!(used & 2) && g1 === a1) used |= 2
-    else if (!(used & 4) && g1 === a2) used |= 4
-    else if (!(used & 8) && g1 === a3) used |= 8
-    if (used !== usedAfter0) s1 = MISPLACED
+    if (!(used & 1) && g1 === a0)
+      used |= 1
+    else if (!(used & 2) && g1 === a1)
+      used |= 2
+    else if (!(used & 4) && g1 === a2)
+      used |= 4
+    else if (!(used & 8) && g1 === a3)
+      used |= 8
+    if (used !== usedAfter0)
+      s1 = MISPLACED
   }
   const usedAfter1 = used
   if (g2 !== skippedValue && s2 !== EXACT) {
-    if (!(used & 1) && g2 === a0) used |= 1
-    else if (!(used & 2) && g2 === a1) used |= 2
-    else if (!(used & 4) && g2 === a2) used |= 4
-    else if (!(used & 8) && g2 === a3) used |= 8
-    if (used !== usedAfter1) s2 = MISPLACED
+    if (!(used & 1) && g2 === a0)
+      used |= 1
+    else if (!(used & 2) && g2 === a1)
+      used |= 2
+    else if (!(used & 4) && g2 === a2)
+      used |= 4
+    else if (!(used & 8) && g2 === a3)
+      used |= 8
+    if (used !== usedAfter1)
+      s2 = MISPLACED
   }
   const usedAfter2 = used
   if (g3 !== skippedValue && s3 !== EXACT) {
-    if (!(used & 1) && g3 === a0) used |= 1
-    else if (!(used & 2) && g3 === a1) used |= 2
-    else if (!(used & 4) && g3 === a2) used |= 4
-    else if (!(used & 8) && g3 === a3) used |= 8
-    if (used !== usedAfter2) s3 = MISPLACED
+    if (!(used & 1) && g3 === a0)
+      used |= 1
+    else if (!(used & 2) && g3 === a1)
+      used |= 2
+    else if (!(used & 4) && g3 === a2)
+      used |= 4
+    else if (!(used & 8) && g3 === a3)
+      used |= 8
+    if (used !== usedAfter2)
+      s3 = MISPLACED
   }
 
   return s0 + s1 * 3 + s2 * 9 + s3 * 27
@@ -126,8 +144,10 @@ export function pinyinFeedbackCode(
 }
 
 function matchValue(value: string): number {
-  if (value === 'exact') return EXACT
-  if (value === 'misplaced') return MISPLACED
+  if (value === 'exact')
+    return EXACT
+  if (value === 'misplaced')
+    return MISPLACED
   return NONE
 }
 
@@ -152,7 +172,6 @@ export function observedCode(
   }
   return code
 }
-
 
 function equalityPattern4(v0: number, v1: number, v2: number, v3: number): number {
   let next = 1
@@ -187,15 +206,18 @@ const orbitCache = new Map<number, number>()
 export function endgameStructureSignature(initial: number, final: number): number {
   const signature = structureSignature(initial, final)
   const cached = orbitCache.get(signature)
-  if (cached != null) return cached
+  if (cached != null)
+    return cached
   const patterns = [0, 8, 16].map(shift =>
     Array.from({ length: 4 }, (_, p) => signature >>> (shift + p * 2) & 3))
   let key = Infinity
   for (let a = 0; a < 4; a++) {
     for (let b = 0; b < 4; b++) {
-      if (b === a) continue
+      if (b === a)
+        continue
       for (let c = 0; c < 4; c++) {
-        if (c === a || c === b) continue
+        if (c === a || c === b)
+          continue
         const d = 6 - a - b - c
         const code = patterns.reduce((value, p, dim) =>
           value | equalityPattern4(p[a], p[b], p[c], p[d]) << (dim * 8), 0)
@@ -206,7 +228,6 @@ export function endgameStructureSignature(initial: number, final: number): numbe
   orbitCache.set(signature, key)
   return key
 }
-
 
 export function jointFeedbackCode(
   guessInitial: number,

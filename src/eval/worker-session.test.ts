@@ -50,7 +50,8 @@ setEvaluationWorkerFactoryForTests(() => {
 afterAll(() => {
   setEvaluationWorkerFactoryForTests()
   for (const [name, descriptor] of previousGlobals) {
-    if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+    if (descriptor)
+      Object.defineProperty(globalThis, name, descriptor)
     else Reflect.deleteProperty(globalThis, name)
   }
 })

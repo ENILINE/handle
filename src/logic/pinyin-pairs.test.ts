@@ -27,4 +27,3 @@ describe('legal pinyin initial-final pairs', () => {
     expect(pinyinFinals).not.toContain('vn')
   })
 })
-

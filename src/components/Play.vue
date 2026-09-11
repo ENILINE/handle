@@ -16,8 +16,10 @@ const isFinishedDelay = debouncedRef(isFinished, 800)
 
 const hintHidden = computed(() => {
   if (playMode.value === 'custom') {
-    if (customOrigin.value === 'own') return true
-    if (customOrigin.value === 'shared' && !hint.value) return true
+    if (customOrigin.value === 'own')
+      return true
+    if (customOrigin.value === 'shared' && !hint.value)
+      return true
   }
   return false
 })
@@ -136,7 +138,7 @@ watchEffect(() => {
     <div flex="~ col" pt4 items-center>
       <WordBlocks
         v-for="w, i of tries"
-        :key="playMode + '-' + i"
+        :key="`${playMode}-${i}`"
         :word="w"
         :revealed="true"
         :rating="evaluationEnabled ? triesRatings[i] : null"
@@ -296,7 +298,9 @@ watchEffect(() => {
 
         <!-- Eval debug -->
         <template v-if="evalDebugTrace.length">
-          <div mt-6 mb-2 op50>联合后验与评价轨迹</div>
+          <div mt-6 mb-2 op50>
+            联合后验与评价轨迹
+          </div>
           <div w-full max-w-220 text-xs text-left flex="~ col gap-2">
             <div v-for="entry of evalDebugTrace" :key="`${entry.guess}-${entry.word}`" border="1 base rounded" p2>
               <b>#{{ entry.guess }} {{ entry.word }}</b>
@@ -333,7 +337,9 @@ watchEffect(() => {
                   找到 {{ entry.analysis.search.candidatesFound }} 个候选 /
                   {{ entry.analysis.search.complete ? '完整结束' : '未完成，不使用部分候选' }}
                 </div>
-                <div v-if="entry.analysis.reason" mt1 text-red>{{ entry.analysis.reason }}</div>
+                <div v-if="entry.analysis.reason" mt1 text-red>
+                  {{ entry.analysis.reason }}
+                </div>
                 <div mt1>
                   猜前 J{{ entry.analysis.informationIsLowerBound ? '≥' : '=' }}{{ entry.analysis.informationBefore.toFixed(3) }}；
                   w={{ entry.analysis.toneWeight.toFixed(4) }}；
@@ -365,7 +371,9 @@ watchEffect(() => {
                 最终 {{ (entry.result.percentile * 100).toFixed(3) }}%；
                 常规 {{ entry.result.normalRating }} → 最终 {{ entry.result.rating }}
               </div>
-              <div v-else-if="entry.rating" mt1>常规评分暂停，采用特殊评级：{{ entry.rating }}</div>
+              <div v-else-if="entry.rating" mt1>
+                常规评分暂停，采用特殊评级：{{ entry.rating }}
+              </div>
               <div v-if="entry.result?.model === 'v3'" mt1 op60>
                 混合 λ={{ entry.result.lambda.toFixed(4) }}（有效假设 {{ entry.result.effectiveHypotheses.toFixed(1) }}）；
                 真实/虚拟 {{ entry.result.realParticles }}/{{ entry.result.virtualParticles }}；
@@ -392,14 +400,20 @@ watchEffect(() => {
               <div v-if="entry.after.degradation === 'corpus-saturated'" mt1 text-ok>
                 词库后验饱和（不代表逻辑上已无未知信息）
               </div>
-              <div v-else-if="entry.after.degradation === 'corpus-sparse'" mt1 text-orange>词库稀疏</div>
-              <div v-else-if="entry.after.degradation === 'invalid'" mt1 text-red>词库联合后验为空</div>
+              <div v-else-if="entry.after.degradation === 'corpus-sparse'" mt1 text-orange>
+                词库稀疏
+              </div>
+              <div v-else-if="entry.after.degradation === 'invalid'" mt1 text-red>
+                词库联合后验为空
+              </div>
             </div>
           </div>
         </template>
 
         <template v-if="lastEvalDebug">
-          <div mt-6 mb-2 op50>1000 词基准排名</div>
+          <div mt-6 mb-2 op50>
+            1000 词基准排名
+          </div>
           <div text-sm>
             {{ lastEvalDebug.model === 'endgame' ? '末盘' : 'V3' }} E={{ lastEvalDebug.playerEI.toFixed(3) }}
             （E1={{ lastEvalDebug.e1.toFixed(3) }} + {{ lastEvalDebug.toneWeight.toFixed(3) }} × E2={{ lastEvalDebug.e2.toFixed(3) }}）

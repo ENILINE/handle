@@ -38,12 +38,11 @@ watch(showCustomShare, (v) => {
 
 function toggleAll() {
   const anySelected = selectedTries.value.some(s => s)
-  if (anySelected) {
+  if (anySelected)
     selectedTries.value = allTries.value.map(() => false)
-  }
-  else {
+
+  else
     selectedTries.value = allTries.value.map((_, i) => i < 9)
-  }
 }
 
 function toggleTry(index: number) {
@@ -120,7 +119,9 @@ function copyLink() {
 
     <!-- Hint input -->
     <div flex="~ col" items-center gap-1>
-      <div op50 text-sm>{{ t('share-custom-hint') }}</div>
+      <div op50 text-sm>
+        {{ t('share-custom-hint') }}
+      </div>
       <input
         v-model="hintChar"
         w-16 p2 border="~ base rounded" text-center text-xl
@@ -129,12 +130,16 @@ function copyLink() {
         @input="hintChar = hintChar.slice(0, 1); invalidHint = false"
         @blur="validateHint"
       >
-      <div v-if="invalidHint" text-mis text-sm>{{ t('invalid-hint-char') }}</div>
+      <div v-if="invalidHint" text-mis text-sm>
+        {{ t('invalid-hint-char') }}
+      </div>
     </div>
 
     <!-- Tries selector -->
     <div v-if="hasTries" flex="~ col" items-center gap-2>
-      <div op50 text-sm>{{ t('share-custom-tries') }}</div>
+      <div op50 text-sm>
+        {{ t('share-custom-tries') }}
+      </div>
       <button text-sm op50 hover:op80 @click="toggleAll()">
         {{ selectedTries.some(s => s) ? t('share-custom-select-none') : t('share-custom-select-all') }}
       </button>

@@ -1284,9 +1284,9 @@ function prepareTurn(state) {
 
   const benchmarkScores = model && tones.length
     ? fixed1000.map(guess =>
-        jointPinyinEntropy(guess, model)
+      jointPinyinEntropy(guess, model)
           + w * toneEntropy(guess, tones),
-      ).sort(ascending)
+    ).sort(ascending)
     : null
 
   return { model, tones, w, compression, benchmarkScores, J }

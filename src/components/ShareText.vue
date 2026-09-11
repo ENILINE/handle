@@ -14,8 +14,10 @@ const props = withDefaults(defineProps<{
 
 const shareHost = computed(() => props.game.playMode === 'daily' ? 'handle.antfu.me' : 'eniline.github.io/handle')
 const dayLabel = computed(() => {
-  if (props.game.playMode === 'daily') return `${numberToHanzi(props.game.day || 0)}日`
-  if (props.game.playMode === 'random') return t('random-mode')
+  if (props.game.playMode === 'daily')
+    return `${numberToHanzi(props.game.day || 0)}日`
+  if (props.game.playMode === 'random')
+    return t('random-mode')
   return t('custom-mode')
 })
 

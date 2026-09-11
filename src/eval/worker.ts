@@ -54,47 +54,47 @@ export interface EvalDebugTraceEntry {
 
 export type EvalWorkerRequest =
   | {
-      type: 'init'
-      sessionId: number
-      guesses: EvalWorkerGuess[]
-      ratingsCurrent: boolean
-      includeDebug: boolean
-      prepareNext?: boolean
-    }
+    type: 'init'
+    sessionId: number
+    guesses: EvalWorkerGuess[]
+    ratingsCurrent: boolean
+    includeDebug: boolean
+    prepareNext?: boolean
+  }
   | {
-      type: 'append'
-      sessionId: number
-      guess: EvalWorkerGuess
-      readyWhenSubmitted: boolean
-      submittedAt: number
-    }
+    type: 'append'
+    sessionId: number
+    guess: EvalWorkerGuess
+    readyWhenSubmitted: boolean
+    submittedAt: number
+  }
 
 export type EvalWorkerResponse =
   | {
-      type: 'guess'
-      sessionId: number
-      index: number
-      word: string
-      applyRating: boolean
-      rating: Rating | null
-      result: EvalResult | null
-      trace?: EvalDebugTraceEntry
-      snapshot: EvalSessionSnapshot
-    }
+    type: 'guess'
+    sessionId: number
+    index: number
+    word: string
+    applyRating: boolean
+    rating: Rating | null
+    result: EvalResult | null
+    trace?: EvalDebugTraceEntry
+    snapshot: EvalSessionSnapshot
+  }
   | {
-      type: 'ready'
-      sessionId: number
-      index: number
-      preparationMs: number
-      generationMs: number
-      rankingMs: number
-      snapshot: EvalSessionSnapshot
-    }
+    type: 'ready'
+    sessionId: number
+    index: number
+    preparationMs: number
+    generationMs: number
+    rankingMs: number
+    snapshot: EvalSessionSnapshot
+  }
   | {
-      type: 'error'
-      sessionId: number
-      message: string
-    }
+    type: 'error'
+    sessionId: number
+    message: string
+  }
 
 function snapshot(state: EvalState, includeDiagnostics: boolean): EvalSessionSnapshot {
   return {
@@ -261,16 +261,16 @@ export class EvalWorkerEngine {
       result: advanced.result,
       trace: this.includeDebug
         ? createTrace(
-            this.state,
-            request.guess,
-            before,
-            advanced.analysis,
-            advanced.result,
-            rating,
-            startedAt,
-            request.readyWhenSubmitted,
-            queueWaitMs,
-          )
+          this.state,
+          request.guess,
+          before,
+          advanced.analysis,
+          advanced.result,
+          rating,
+          startedAt,
+          request.readyWhenSubmitted,
+          queueWaitMs,
+        )
         : undefined,
       snapshot: snapshot(this.state, this.includeDebug),
     })

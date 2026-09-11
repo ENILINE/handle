@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { parseWord, testAnswer } from '../logic/utils'
+import { EvalWorkerEngine } from './worker'
+import type { EvalWorkerResponse } from './worker'
 import {
   advancePreparedEvaluation,
   analyzeInternalLegacy,
@@ -8,9 +11,6 @@ import {
   strictLowerBound,
   updateState,
 } from './index'
-import { EvalWorkerEngine } from './worker'
-import type { EvalWorkerResponse } from './worker'
-import { parseWord, testAnswer } from '../logic/utils'
 
 describe('prepared evaluation parity', () => {
   it('keeps V3 entropy, strict rank, rating and actual information unchanged', () => {

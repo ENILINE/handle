@@ -2,8 +2,8 @@ import { breakpointsTailwind } from '@vueuse/core'
 import { nanoid } from 'nanoid'
 import { watchEffect } from 'vue'
 import type { MatchType, ParsedChar } from './logic'
-import { START_DATE, TRIES_LIMIT, WORD_LENGTH, createCareerRecord, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, getHint, isDstObserved, numberToHanzi } from './logic'
-import { playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, gameMode as _gameMode, inputMode, markResult, meta, randomHistory, randomMeta, showEval, spMode, tries } from './storage'
+import { START_DATE, TRIES_LIMIT, WORD_LENGTH, parseWord as _parseWord, testAnswer as _testAnswer, checkPass, createCareerRecord, getHint, isDstObserved, numberToHanzi } from './logic'
+import { gameMode as _gameMode, playMode as _playMode, useNumberTone as _useNumberTone, customMeta, frequencyLevel, inputMode, markResult, meta, randomHistory, randomMeta, showEval, spMode, tries } from './storage'
 import { getAnswerOfDay } from './answers'
 import { getRandomAnswer } from './logic/random'
 import { decodeCustom, encodeCustom } from './logic/encode'
@@ -167,9 +167,8 @@ if (customPayload.value) {
   // Pre-load shared state
   if (customPayload.value.m)
     _gameMode.value = customPayload.value.m
-  if (customPayload.value.t && customPayload.value.t.length > 0) {
+  if (customPayload.value.t && customPayload.value.t.length > 0)
     customMeta.value = { tries: customPayload.value.t }
-  }
 }
 
 if (params.get('mode') === 'random' && !customPayload.value)
@@ -190,11 +189,12 @@ export const answer = computed(() => {
   }
   if (playMode.value === 'random')
     return randomAnswer.value
-  if (params.get('word'))
+  if (params.get('word')) {
     return {
       word: params.get('word')!,
       hint: getHint(params.get('word')!),
     }
+  }
   return getAnswerOfDay(dayNo.value)
 })
 

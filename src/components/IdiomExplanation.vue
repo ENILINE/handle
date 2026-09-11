@@ -89,7 +89,9 @@ const feedbackUrl = computed(() => getIdiomFeedbackUrl(searchWord.value))
       <div i-carbon-close />
     </button>
 
-    <p text-xl font-serif mb3>{{ t('idiom-title') }}</p>
+    <p text-xl font-serif mb3>
+      {{ t('idiom-title') }}
+    </p>
 
     <div relative border="2 base rounded-0">
       <input
@@ -105,7 +107,9 @@ const feedbackUrl = computed(() => getIdiomFeedbackUrl(searchWord.value))
 
     <div v-if="loading" flex="~ col center" gap-3 py10>
       <div i-carbon-circle-dash animate-spin text-3xl op50 />
-      <div op50>{{ t('idiom-loading') }}</div>
+      <div op50>
+        {{ t('idiom-loading') }}
+      </div>
     </div>
 
     <div v-else-if="error" flex="~ col center" gap-3 py10>
@@ -118,28 +122,46 @@ const feedbackUrl = computed(() => getIdiomFeedbackUrl(searchWord.value))
 
     <div v-else-if="notFound" flex="~ col center" gap-3 py10>
       <div i-carbon-document-unknown text-3xl op50 />
-      <div op50>{{ t('idiom-no-explanation') }}</div>
+      <div op50>
+        {{ t('idiom-no-explanation') }}
+      </div>
     </div>
 
     <div v-else-if="info" flex="~ col" gap-4 w-full mt5>
       <div>
-        <div text-2xl font-serif tracking-2>{{ searchWord }}</div>
-        <div v-if="pinyin" text-sm font-mono op50 mt1>{{ pinyin }}</div>
+        <div text-2xl font-serif tracking-2>
+          {{ searchWord }}
+        </div>
+        <div v-if="pinyin" text-sm font-mono op50 mt1>
+          {{ pinyin }}
+        </div>
       </div>
 
       <div v-if="hasExplanation" text-left>
-        <div text-sm font-bold op50 mb1>{{ t('idiom-explanation-title') }}</div>
-        <div leading-relaxed>{{ info.explanation }}</div>
+        <div text-sm font-bold op50 mb1>
+          {{ t('idiom-explanation-title') }}
+        </div>
+        <div leading-relaxed>
+          {{ info.explanation }}
+        </div>
       </div>
 
       <div v-if="hasDerivation" text-left>
-        <div text-sm font-bold op50 mb1>{{ t('idiom-derivation') }}</div>
-        <div leading-relaxed text-sm>{{ info.derivation }}</div>
+        <div text-sm font-bold op50 mb1>
+          {{ t('idiom-derivation') }}
+        </div>
+        <div leading-relaxed text-sm>
+          {{ info.derivation }}
+        </div>
       </div>
 
       <div v-if="hasExample" text-left>
-        <div text-sm font-bold op50 mb1>{{ t('idiom-example') }}</div>
-        <div leading-relaxed text-sm>{{ info.example }}</div>
+        <div text-sm font-bold op50 mb1>
+          {{ t('idiom-example') }}
+        </div>
+        <div leading-relaxed text-sm>
+          {{ info.example }}
+        </div>
       </div>
 
       <a

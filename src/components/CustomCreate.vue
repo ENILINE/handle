@@ -28,7 +28,9 @@ function confirm() {
 
 <template>
   <div flex="~ col" items-center pt12 gap-4>
-    <div text-xl font-serif>{{ t('custom-mode') }}</div>
+    <div text-xl font-serif>
+      {{ t('custom-mode') }}
+    </div>
     <div relative border="2 base rounded-0">
       <input
         v-model="inputValue"

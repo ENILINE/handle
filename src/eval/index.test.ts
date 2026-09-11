@@ -1,27 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { FINAL_BITS, FINALS, INITIAL_BITS, INITIALS, NULL_INITIAL_ID, TONE_BITS } from './data'
+import { parseWord, testAnswer } from '../logic/utils'
+import { FINALS, FINAL_BITS, INITIALS, INITIAL_BITS, NULL_INITIAL_ID, TONE_BITS } from './data'
 import {
-  analyzeGuess,
-  blendI1Probability,
-  combineActualInformation,
-  combineExpectedInformation,
-  createEvalState,
-  canAppendEvaluation,
-  canReuseRatings,
   EVAL_ALGORITHM_VERSION,
   EVAL_CORPUS_VERSION,
   EVAL_VERSION,
+  I1_PARTICLE_FULL_WEIGHT_HITS,
+  analyzeGuess,
+  blendI1Probability,
+  canAppendEvaluation,
+  canReuseRatings,
+  combineActualInformation,
+  combineExpectedInformation,
+  createEvalState,
   evalTesting,
   evaluate,
   feedbackCode,
   feedbackEntropy,
   getEvalDiagnosticSnapshot,
-  I1_PARTICLE_FULL_WEIGHT_HITS,
   pinyinFeedbackCode,
   updateState,
   v3RealMixRatio,
 } from './index'
-import { parseWord, testAnswer } from '../logic/utils'
 
 const initialId = new Map<string, number>(INITIALS.map((value, index) => [value, index]))
 const finalId = new Map<string, number>(FINALS.map((value, index) => [value, index]))

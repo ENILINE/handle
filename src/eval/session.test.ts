@@ -2,10 +2,10 @@
 import { afterAll, expect, it, vi } from 'vitest'
 import { computed, nextTick, ref, watch } from 'vue'
 import { useBreakpoints, useDark, useDebounce, useNow, useStorage } from '@vueuse/core'
-import { advanceEvaluation, createEvalState, EVAL_VERSION } from './index'
 import { parseWord, testAnswer } from '../logic/utils'
 import { setEvaluationWorkerFactoryForTests } from './worker-factory'
 import { createInlineEvaluationWorker } from './worker-test'
+import { EVAL_VERSION, advanceEvaluation, createEvalState } from './index'
 
 vi.mock('../logic/random', () => ({ getRandomAnswer: () => ({ word: '狂风怒号', hint: '风' }) }))
 
@@ -18,7 +18,8 @@ setEvaluationWorkerFactoryForTests(createInlineEvaluationWorker)
 afterAll(() => {
   setEvaluationWorkerFactoryForTests()
   for (const [name, descriptor] of previousGlobals) {
-    if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+    if (descriptor)
+      Object.defineProperty(globalThis, name, descriptor)
     else Reflect.deleteProperty(globalThis, name)
   }
 })

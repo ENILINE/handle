@@ -6,36 +6,28 @@ import { ENDGAME_PRODUCT_LIMIT, createEndgamePrior, enumerateEndgame } from './e
 import type { EndgameBudget, EndgamePrior, EndgameSearch, PinyinHistoryEntry } from './endgame'
 import { higherRating, matchesAllFeedback, specialRatingForGuess } from './rating'
 import type { VisibleGuess } from './rating'
-export {
-  EVAL_ALGORITHM_VERSION,
-  EVAL_CORPUS_VERSION,
-  EVAL_VERSION,
-  canAppendEvaluation,
-  canReuseRatings,
-} from './version'
-export { feedbackCode, pinyinFeedbackCode } from './feedback'
 import {
   CALIBRATION_SEED,
   ENDGAME_SIGNATURE_KEYS,
   ENDGAME_SIGNATURE_WEIGHTS,
   EVAL_ROW_COUNT,
+  FINALS,
   FINAL_BITS,
   FINAL_SLOT_COUNTS_BASE64,
-  FINALS,
   FINAL_TUPLES_BASE64,
+  INITIALS,
   INITIAL_BITS,
   INITIAL_SLOT_COUNTS_BASE64,
-  INITIALS,
   INITIAL_TUPLES_BASE64,
   LEGAL_PINYIN_COUNT,
   NULL_INITIAL_ID,
   PINYIN_ID_COUNT,
   SAMPLED_FINALS_BASE64,
   SAMPLED_INITIALS_BASE64,
+  SAMPLED_TONES_BASE64,
   SAMPLED_WORDS,
   SAMPLE_SEED,
   SAMPLE_SIZE,
-  SAMPLED_TONES_BASE64,
   SIGNATURE_WEIGHT_MAX,
   SIGNATURE_WEIGHT_MIN,
   SLOT_COUNT,
@@ -45,6 +37,14 @@ import {
   TONE_BITS,
   TONE_TUPLES_BASE64,
 } from './data'
+export {
+  EVAL_ALGORITHM_VERSION,
+  EVAL_CORPUS_VERSION,
+  EVAL_VERSION,
+  canAppendEvaluation,
+  canReuseRatings,
+} from './version'
+export { feedbackCode, pinyinFeedbackCode } from './feedback'
 
 export const MAX_POSTERIOR_SAMPLES = 4096
 export const V3_PARTICLE_COUNT = 4096
@@ -156,7 +156,6 @@ function splitPinyin(syllable: string): [string, string] {
   return ['null', base]
 }
 
-
 function parsePinyins(pinyins: readonly string[]): { initial: number; final: number; tone: number } {
   const initials: number[] = []
   const finals: number[] = []
@@ -185,7 +184,6 @@ function parseWordTuples(word: string): { initial: number; final: number; tone: 
 function parseParsedTuples(parsed: readonly ParsedChar[]): { initial: number; final: number; tone: number } {
   return parsePinyins(parsed.map(char => `${char.yin}${char.tone || ''}`))
 }
-
 
 function allRows(): Uint32Array {
   return Uint32Array.from({ length: EVAL_ROW_COUNT }, (_, index) => index)
@@ -409,7 +407,8 @@ function feedbackStatistics(
 
   let entropy = 0
   for (const count of counts) {
-    if (!count) continue
+    if (!count)
+      continue
     const probability = count / targets.length
     entropy -= probability * Math.log2(probability)
   }
@@ -430,13 +429,17 @@ interface EvalParticles {
   weights?: Float64Array
 }
 
-
 export function ratingFromPercentile(percentile: number): Rating {
-  if (percentile > 0.99) return 'brilliant'
-  if (percentile > 0.90) return 'excellent'
-  if (percentile > 0.70) return 'good'
-  if (percentile > 0.50) return 'average'
-  if (percentile > 0.30) return 'mistake'
+  if (percentile > 0.99)
+    return 'brilliant'
+  if (percentile > 0.90)
+    return 'excellent'
+  if (percentile > 0.70)
+    return 'good'
+  if (percentile > 0.50)
+    return 'average'
+  if (percentile > 0.30)
+    return 'mistake'
   return 'incorrect'
 }
 
@@ -466,7 +469,6 @@ export interface EvalI1Details {
   blendedProbability: number
 }
 
-
 const JOINT_FEEDBACK_BUCKETS = FEEDBACK_BUCKETS ** 3
 const jointFeedbackCounts = new Float64Array(JOINT_FEEDBACK_BUCKETS)
 const touchedJointFeedback = new Uint32Array(JOINT_FEEDBACK_BUCKETS)
@@ -474,7 +476,6 @@ const touchedJointFeedback = new Uint32Array(JOINT_FEEDBACK_BUCKETS)
 const signatureWeights = new Map<number, number>(
   STRUCTURE_SIGNATURE_KEYS.map((key, index) => [key, STRUCTURE_SIGNATURE_WEIGHTS[index]]),
 )
-
 
 function candidateLogWeight(initial: number, final: number): {
   valid: boolean
@@ -796,7 +797,6 @@ function jointFeedbackEntropy(
   return jointFeedbackStatistics(guessInitial, guessFinal, particles).entropy
 }
 
-
 function jointFeedbackStatistics(
   guessInitial: number,
   guessFinal: number,
@@ -995,9 +995,11 @@ export function analyzeInternalLegacy(
     const code = observedCode(parsedGuess, results, 'tone')
     let hits = 0
     for (const row of state.toneRows) {
-      if (feedbackCode(guess.tone, getToneTuples()[row], TONE_BITS) === code) hits++
+      if (feedbackCode(guess.tone, getToneTuples()[row], TONE_BITS) === code)
+        hits++
     }
-    if (hits) i2 = -Math.log2(hits / state.toneRows.length)
+    if (hits)
+      i2 = -Math.log2(hits / state.toneRows.length)
   }
 
   const analysis: EvalAnalysis = {
@@ -1010,21 +1012,32 @@ export function analyzeInternalLegacy(
     informationIsLowerBound: !!(state.information.missingI1 || state.information.missingI2),
     toneWeight: toneWeightForInformation(informationBefore),
     compression: compressionForInformation(informationBefore, sizes.posteriorProduct),
-    candidateCount: 0, e2, i2, generationMs: 0, elapsedMs: 0,
+    candidateCount: 0,
+    e2,
+    i2,
+    generationMs: 0,
+    elapsedMs: 0,
   }
   let particles: EvalParticles | undefined
   let v3: V3Particles | undefined
   if (analysis.model === 'endgame') {
     const search = enumerateEndgame(state.history, getEndgamePrior(), budget)
-    analysis.search = { status: search.status, complete: search.complete, nodes: search.nodes,
-      candidatesFound: search.candidatesFound, reason: search.reason }
-    if (search.status === 'complete') particles = search
+    analysis.search = {
+      status: search.status,
+      complete: search.complete,
+      nodes: search.nodes,
+      candidatesFound: search.candidatesFound,
+      reason: search.reason,
+    }
+    if (search.status === 'complete')
+      particles = search
     else analysis.reason = search.reason
   }
   else {
     v3 = createV3Particles(state) || undefined
     particles = v3
-    if (!particles) analysis.reason = '声韵联合后验不可用，常规评分暂停'
+    if (!particles)
+      analysis.reason = '声韵联合后验不可用，常规评分暂停'
   }
   analysis.generationMs = performance.now() - startedAt
   if (particles && particles.initials.length && Number.isFinite(e2)) {
@@ -1089,7 +1102,8 @@ export function prepareEvaluation(
       candidatesFound: search.candidatesFound,
       reason: search.reason,
     }
-    if (search.status === 'complete') prepared.particles = search
+    if (search.status === 'complete')
+      prepared.particles = search
     else prepared.reason = search.reason
   }
   else {
@@ -1143,9 +1157,11 @@ function analyzePrepared(
     const code = observedCode(parsedGuess, results, 'tone')
     let hits = 0
     for (const row of state.toneRows) {
-      if (feedbackCode(guess.tone, getToneTuples()[row], TONE_BITS) === code) hits++
+      if (feedbackCode(guess.tone, getToneTuples()[row], TONE_BITS) === code)
+        hits++
     }
-    if (hits) i2 = -Math.log2(hits / state.toneRows.length)
+    if (hits)
+      i2 = -Math.log2(hits / state.toneRows.length)
   }
 
   const analysis: EvalAnalysis = {
@@ -1202,7 +1218,8 @@ export function strictLowerBound(sorted: ArrayLike<number>, value: number): numb
   let high = sorted.length
   while (low < high) {
     const middle = (low + high) >>> 1
-    if (sorted[middle] < value) low = middle + 1
+    if (sorted[middle] < value)
+      low = middle + 1
     else high = middle
   }
   return low
@@ -1292,7 +1309,8 @@ export function rankAnalysisLegacy(
     const benchmarkE1 = jointFeedbackEntropy(sampledInitials[index], sampledFinals[index], particles)
     const benchmarkE2 = feedbackEntropy(sampledTones[index], tones, TONE_BITS)
     const entropy = combineExpectedInformation(benchmarkE1, benchmarkE2, analysis.toneWeight)
-    if (entropy < playerEI) lowerCount++
+    if (entropy < playerEI)
+      lowerCount++
     entries?.push({ word: SAMPLED_WORDS[index], ei: entropy, e1: benchmarkE1, e2: benchmarkE2 })
   }
   entries?.sort((left, right) => right.ei - left.ei)
@@ -1301,8 +1319,15 @@ export function rankAnalysisLegacy(
   const percentile = compressPercentile(rawPercentile, analysis.compression)
   const normalRating = ratingFromPercentile(percentile)
   return {
-    ...analysis, e1, playerEI, rawPercentile, percentile,
-    normalRating, rating: higherRating(normalRating, analysis.specialRating)!, rank: lowerCount, total: SAMPLE_SIZE,
+    ...analysis,
+    e1,
+    playerEI,
+    rawPercentile,
+    percentile,
+    normalRating,
+    rating: higherRating(normalRating, analysis.specialRating)!,
+    rank: lowerCount,
+    total: SAMPLE_SIZE,
     initialPosterior: state.initialRows.length,
     finalPosterior: state.finalRows.length,
     tonePosterior: state.toneRows.length,
@@ -1440,9 +1465,11 @@ export function updateState(
     guess: parsedGuess.map(char => ({ ...char, parts: [...char.parts] })),
     feedback: results.map(result => ({ ...result })),
   })
-  if (analysis.i1 != null && Number.isFinite(analysis.i1)) state.information.i1 += analysis.i1
+  if (analysis.i1 != null && Number.isFinite(analysis.i1))
+    state.information.i1 += analysis.i1
   else state.information.missingI1++
-  if (analysis.i2 != null && Number.isFinite(analysis.i2)) state.information.i2 += analysis.i2
+  if (analysis.i2 != null && Number.isFinite(analysis.i2))
+    state.information.i2 += analysis.i2
   else state.information.missingI2++
 
   state.initialRows = filterRows(

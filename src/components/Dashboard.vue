@@ -238,11 +238,15 @@ function playedAt(record: CareerRecord) {
           {{ t('guess-dist') }}
         </p>
         <div v-for="item of histogram" :key="item.label" flex items-center gap-2 my1>
-          <div w-8 flex-none text-right op50>{{ item.label }}</div>
+          <div w-8 flex-none text-right op50>
+            {{ item.label }}
+          </div>
           <div flex-1 h-5 bg-gray-500:5>
             <div bg-primary h-full :style="{ width: `${item.count / histogramMax * 100}%` }" />
           </div>
-          <div w-8 flex-none text-left text-sm>{{ item.count }}</div>
+          <div w-8 flex-none text-left text-sm>
+            {{ item.count }}
+          </div>
         </div>
       </section>
 

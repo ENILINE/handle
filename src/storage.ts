@@ -24,7 +24,8 @@ export const randomHistory = useStorage<Record<string, CareerRecord>>('handle-ra
 function customStorageKey(): string {
   const params = new URLSearchParams(location.search)
   const cp = params.get('custom')
-  if (!cp) return 'handle-custom-own'
+  if (!cp)
+    return 'handle-custom-own'
   let hash = 5381
   for (let i = 0; i < cp.length; i++)
     hash = ((hash << 5) + hash + cp.charCodeAt(i)) | 0
