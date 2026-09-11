@@ -98,7 +98,7 @@ export function testAnswer(input: ParsedChar[], answer: ParsedChar[]) {
   return input.map((a, i): MatchResult => {
     const char = toSimplified(a.char)
     return {
-      char: answer[i].char === char || answer[i].char === a.char
+      char: (answer[i].char === char || answer[i].char === a.char)
         ? 'exact'
         : includesAndRemove(unmatched.char, char)
           ? 'misplaced'
@@ -108,17 +108,17 @@ export function testAnswer(input: ParsedChar[], answer: ParsedChar[]) {
         : includesAndRemove(unmatched.tone, a.tone)
           ? 'misplaced'
           : 'none',
-      _1: !a._1 || answer[i].parts.includes(a._1)
+      _1: (!a._1 || answer[i].parts.includes(a._1))
         ? 'exact'
         : includesAndRemove(unmatched.parts, a._1)
           ? 'misplaced'
           : 'none',
-      _2: !a._2 || answer[i].parts.includes(a._2)
+      _2: (!a._2 || answer[i].parts.includes(a._2))
         ? 'exact'
         : includesAndRemove(unmatched.parts, a._2)
           ? 'misplaced'
           : 'none',
-      _3: !a._3 || answer[i].parts.includes(a._3)
+      _3: (!a._3 || answer[i].parts.includes(a._3))
         ? 'exact'
         : includesAndRemove(unmatched.parts, a._3)
           ? 'misplaced'

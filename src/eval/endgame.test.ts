@@ -63,7 +63,6 @@ describe('complete endgame regressions', () => {
     expect(result.compression).toBe(1)
     expect(result.elapsedMs).toBeLessThan(3000)
     expect(result.sampled).toHaveLength(1000)
-    console.info('笔酣墨饱末盘', { candidates: search.candidatesFound, nodes: search.nodes, e1: result.e1, ms: result.elapsedMs })
   })
 
   it('restores er and c possibilities in the second endgame without hardcoding grades', () => {
@@ -79,7 +78,6 @@ describe('complete endgame regressions', () => {
       expect(result.model).toBe('endgame')
       expect(result.e1).toBeGreaterThan(0)
       expect(result.elapsedMs).toBeLessThan(3000)
-      console.info(`${word}末盘`, { candidates: search.candidatesFound, nodes: search.nodes, e1: result.e1, ms: result.elapsedMs })
     }
   })
 
@@ -218,7 +216,6 @@ describe('constraints, duplicate feedback and position-free prior', () => {
     expect(scores.every(Number.isFinite)).toBe(true)
     const elapsedMs = performance.now() - startedAt
     expect(elapsedMs).toBeLessThan(3000)
-    console.info('4096加权候选 × 1000词（含声调）', { ms: elapsedMs })
   })
 })
 

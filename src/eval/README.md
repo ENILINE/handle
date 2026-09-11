@@ -1282,7 +1282,7 @@ function prepareTurn(state) {
   const w = toneWeight(J)
   const compression = NI * NF <= 32 ? 1 : clamp((J - 23) / 7)
 
-  const benchmarkScores = model && tones.length
+  const benchmarkScores = (model && tones.length)
     ? fixed1000.map(guess =>
       jointPinyinEntropy(guess, model)
           + w * toneEntropy(guess, tones),

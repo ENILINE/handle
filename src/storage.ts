@@ -114,7 +114,7 @@ export function markResult() {
   meta.value.resultAt = meta.value.end
     || (legacyFinished ? meta.value.start : undefined)
     || Date.now()
-  meta.value.resultDuration = meta.value.end || legacyFinished
+  meta.value.resultDuration = (meta.value.end || legacyFinished)
     ? (meta.value.duration || 0)
     : currentDuration()
 }

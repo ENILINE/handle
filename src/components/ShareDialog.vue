@@ -19,6 +19,14 @@ const shareType = ref<'text' | 'image' | null>()
 const shareEvaluation = ref(false)
 const shareMask = ref(false)
 
+function currentHintLevel(): 0 | 1 | 2 {
+  if (meta.value.hintLevel && meta.value.hintLevel >= 2)
+    return 2
+  if (meta.value.hint || meta.value.hintLevel)
+    return 1
+  return 0
+}
+
 const currentGame = computed<ShareGameSnapshot>(() => ({
   answer: answer.value.word,
   playMode: playMode.value,
@@ -26,11 +34,7 @@ const currentGame = computed<ShareGameSnapshot>(() => ({
   gameMode: activeGameMode.value,
   tries: [...tries.value],
   hintUsed: !!(meta.value.hint || meta.value.hintLevel),
-  hintLevel: meta.value.hintLevel && meta.value.hintLevel >= 2
-    ? 2
-    : meta.value.hint || meta.value.hintLevel
-      ? 1
-      : 0,
+  hintLevel: currentHintLevel(),
   duration: meta.value.resultDuration ?? meta.value.duration ?? 0,
   ratings: [...triesRatings.value],
   ratingsVersion: meta.value.ratingsVersion,

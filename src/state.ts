@@ -43,7 +43,9 @@ watch(playMode, (v) => {
   useMask.value = false
   showGiveUp.value = false
   isSwitchingMode.value = true
-  nextTick(() => { isSwitchingMode.value = false })
+  nextTick(() => {
+    isSwitchingMode.value = false
+  })
 })
 watch(_playMode, (v) => {
   playMode.value = v

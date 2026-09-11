@@ -58,10 +58,22 @@ function feedbackCodeValues(
   let s3 = NONE
   let used = 0
 
-  if (g0 !== skippedValue && g0 === a0) { s0 = EXACT; used |= 1 }
-  if (g1 !== skippedValue && g1 === a1) { s1 = EXACT; used |= 2 }
-  if (g2 !== skippedValue && g2 === a2) { s2 = EXACT; used |= 4 }
-  if (g3 !== skippedValue && g3 === a3) { s3 = EXACT; used |= 8 }
+  if (g0 !== skippedValue && g0 === a0) {
+    s0 = EXACT
+    used |= 1
+  }
+  if (g1 !== skippedValue && g1 === a1) {
+    s1 = EXACT
+    used |= 2
+  }
+  if (g2 !== skippedValue && g2 === a2) {
+    s2 = EXACT
+    used |= 4
+  }
+  if (g3 !== skippedValue && g3 === a3) {
+    s3 = EXACT
+    used |= 8
+  }
 
   const usedBefore0 = used
   if (g0 !== skippedValue && s0 !== EXACT) {

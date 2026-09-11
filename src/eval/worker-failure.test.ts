@@ -9,7 +9,9 @@ vi.mock('../logic/random', () => ({ getRandomAnswer: () => ({ word: '狂风怒�
 const globals = { computed, nextTick, ref, watch, useBreakpoints, useDark, useDebounce, useNow, useStorage }
 const previousGlobals = Object.keys(globals).map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)] as const)
 for (const [name, value] of Object.entries(globals)) vi.stubGlobal(name, value)
-setEvaluationWorkerFactoryForTests(() => { throw new Error('worker blocked') })
+setEvaluationWorkerFactoryForTests(() => {
+  throw new Error('worker blocked')
+})
 
 afterAll(() => {
   setEvaluationWorkerFactoryForTests()

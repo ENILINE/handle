@@ -56,12 +56,12 @@ export function createCareerRecord(source: CareerRecordSource): CareerRecord | n
   const tries = [...(meta.tries || [])]
   const simplifiedAnswer = toSimplified(source.answer)
   const answerIndex = tries.findIndex(word => toSimplified(word) === simplifiedAnswer)
-  const outcome = answerIndex >= 0 && answerIndex < TRIES_LIMIT ? 'win' : 'failed'
-  const hintLevel = meta.hintLevel && meta.hintLevel >= 2
-    ? 2
-    : meta.hint || meta.hintLevel
-      ? 1
-      : 0
+  const outcome = (answerIndex >= 0 && answerIndex < TRIES_LIMIT) ? 'win' : 'failed'
+  let hintLevel: 0 | 1 | 2 = 0
+  if (meta.hintLevel && meta.hintLevel >= 2)
+    hintLevel = 2
+  else if (meta.hint || meta.hintLevel)
+    hintLevel = 1
 
   return {
     id: source.id,

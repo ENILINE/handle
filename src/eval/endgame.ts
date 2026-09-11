@@ -169,7 +169,10 @@ export function enumerateEndgame(
                 : forced.length === max ? slots[p].filter(s => s.values[dim] !== value) : slots[p]
               if (!filtered.length)
                 return false
-              if (filtered.length !== slots[p].length) { slots[p] = filtered; changed = true }
+              if (filtered.length !== slots[p].length) {
+                slots[p] = filtered
+                changed = true
+              }
             }
           }
         }
@@ -180,7 +183,10 @@ export function enumerateEndgame(
     function visit(slots: EndgameSyllable[][]): void {
       if (stopped)
         return
-      if (nodes >= maxNodes) { stopped = 'node-limit'; return }
+      if (nodes >= maxNodes) {
+        stopped = 'node-limit'
+        return
+      }
       nodes++
       if (!propagate(slots))
         return
@@ -206,7 +212,10 @@ export function enumerateEndgame(
       if (!satisfiesHistory(initial, final, history))
         return
       candidatesFound++
-      if (candidatesFound > maxCandidates) { stopped = 'candidate-limit'; return }
+      if (candidatesFound > maxCandidates) {
+        stopped = 'candidate-limit'
+        return
+      }
       const correction = prior.signatureWeights.get(endgameStructureSignature(initial, final)) ?? SIGNATURE_WEIGHT_MIN
       weights.push(slots.reduce((weight, slot) => weight * slot[0].probability, correction))
       initials.push(initial)

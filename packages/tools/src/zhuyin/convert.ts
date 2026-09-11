@@ -12,7 +12,7 @@ export function toZhuyin(pinyin: string | ParsedPinyin, renderTone = true) {
   if (!base)
     throw new Error(`Invalid pinyin ${pinyin.base}`)
 
-  const tone = renderTone && pinyin.tone ? toneSymbols[pinyin.tone] : ''
+  const tone = (renderTone && pinyin.tone) ? toneSymbols[pinyin.tone] : ''
   return base + tone
 }
 

@@ -19,7 +19,7 @@ export function formatRatedShareRow(
   enabled: boolean,
   translate: (key: typeof RATING_LABEL_KEYS[Rating]) => string,
 ): string {
-  return enabled && rating
+  return (enabled && rating)
     ? `${symbols} ${translate(RATING_LABEL_KEYS[rating])}`
     : symbols
 }

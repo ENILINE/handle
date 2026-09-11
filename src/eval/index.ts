@@ -417,7 +417,7 @@ function feedbackStatistics(
     entropy,
     observedCount,
     sampleSize: targets.length,
-    information: observedCount == null || !observedCount
+    information: (observedCount == null || !observedCount)
       ? undefined
       : -Math.log2(observedCount / targets.length),
   }
@@ -839,7 +839,7 @@ function jointFeedbackStatistics(
     entropy,
     observedCount,
     sampleSize: particles.initials.length,
-    information: observed == null || !observedCount
+    information: (observed == null || !observedCount)
       ? undefined
       : -Math.log2(Math.min(1, observedCount / totalMass)),
   }
@@ -1055,7 +1055,7 @@ export function analyzeInternalLegacy(
     }
     else if (observed != null) {
       const real = realJointFeedbackCount(state, guess.initial, guess.final, observed)
-      const details = real && base.observedCount != null
+      const details = (real && base.observedCount != null)
         ? blendI1Probability(base.observedCount, base.sampleSize, real.hits, real.total)
         : null
       analysis.i1Details = details || undefined
@@ -1199,7 +1199,7 @@ function analyzePrepared(
     }
     else if (observed != null) {
       const real = realJointFeedbackCount(state, guess.initial, guess.final, observed)
-      const details = real && base.observedCount != null
+      const details = (real && base.observedCount != null)
         ? blendI1Probability(base.observedCount, base.sampleSize, real.hits, real.total)
         : null
       analysis.i1Details = details || undefined
