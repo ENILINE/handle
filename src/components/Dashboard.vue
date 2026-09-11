@@ -187,12 +187,12 @@ function playedAt(record: CareerRecord) {
 
 <template>
   <div p5 flex="~ col center" relative w-full max-w-190 min-w-0 mx-auto>
-    <div absolute top-4 right-4 flex="~ gap-3">
+    <div fixed z-10 top-4 right-4 flex="~ gap-3">
       <button icon-btn @click="close">
         <div i-carbon-close />
       </button>
     </div>
-    <button v-if="page === 'detail'" absolute top-4 left-4 icon-btn @click="backToMain">
+    <button v-if="page === 'detail'" fixed z-10 top-4 left-4 icon-btn @click="backToMain">
       <div i-carbon-arrow-left />
     </button>
 

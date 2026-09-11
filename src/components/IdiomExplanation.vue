@@ -85,7 +85,7 @@ const feedbackUrl = computed(() => getIdiomFeedbackUrl(searchWord.value))
 
 <template>
   <div p5 flex="~ col center" max-w-140 ma relative>
-    <button absolute top-4 right-4 icon-btn @click="showIdiomExplanation = false">
+    <button fixed z-10 top-4 right-4 icon-btn @click="showIdiomExplanation = false">
       <div i-carbon-close />
     </button>
 

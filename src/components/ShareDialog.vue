@@ -79,7 +79,11 @@ onMounted(() => {
         <div i-carbon-close />
       </button>
     </div>
-    <div v-if="shareType || embedded" absolute top-4 left-4 flex="~">
+    <div
+      v-if="shareType || embedded"
+      z-10 top-4 left-4 flex="~"
+      :class="embedded ? 'fixed' : 'absolute'"
+    >
       <button icon-btn @click="shareType ? shareType = null : close()">
         <div i-carbon-arrow-left />
       </button>
